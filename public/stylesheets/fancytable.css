@@ -1,0 +1,25 @@
+/* For the fancytable. */
+
+.fancytable_edit_panel {
+	background-color: #CCCCFF;
+}
+.fancytable_cell_focus {
+	background-color: #CCCCFF;
+}
+
+.layout_table {
+	width: 100%;
+	border: none;
+	padding: 0px;
+	border-spacing: 0px;
+}
+
+/* Make the widget overlay sit on top (to dim it out while loading is happening) */
+
+.ui-widget-overlay {
+	z-index:1;
+}
+
+/* replace loading */
+.ui-jqgrid .loading {position: absolute; top: 0px;left: 45%;width: auto;z-index:101;padding: 0px; margin: 2px;text-align: center;font-weight: bold;display: none;border-width: 0px !important;}
+/* end loading div */

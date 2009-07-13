@@ -1,0 +1,23 @@
+<%
+	# Note: This requires the lib/jquery_apotomo_helper_methods to have been required somewhere
+	# (in order to get past the dependency on Prototype)
+%>
+<div class="fancytable_edit_panel">
+	<%#= form_to_event :state => :_edit_panel_submit %>
+		<table>
+			<tr>
+				<td>Empty</td>
+				<td>Form</td>
+			</tr>
+			<tr>
+				<td colspan="2">This is an edit panel placeholder in (vendor/plugins/jqgrid_widget/)app/cells/jqgrid_widget/_panel.html.erb. Create a _panel.html.erb partial on this model and put it in app/cells/[widget]/ to use it.</td>
+			</tr>
+			<tr>
+				<td colspan="2">
+					<%#= submit_tag @record.new_record? ? "Add" : "Update" %> 
+					<%= cancel_button %>
+				</td>
+			</tr>
+		</table>
+	<!-- </form> -->
+</div>

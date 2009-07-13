@@ -1,0 +1,25 @@
+<% col_width = (100/@filter_sequence.size).floor %>
+<div id="#{@jqgrid}_filter_div" class="ui-widget" style="text-align:center;" width="100%">
+	<table id="#{@jqgrid}_filter_table" class="ui-widget-content" width="100%">
+		<thead>
+			<tr>
+				<% @filter_sequence.each do |filter| %>
+					<th class="ui-state-default" width="#{col_width}%">
+						#{link_to_event(@filters[filter][:name], :state => :_set_filter, :filter => filter)}
+					</th>
+				<% end %>
+			</tr>
+		</thead>
+		<tbody>
+			<tr>
+				<% @filter_sequence.each do |filter| %>
+				<td></td>
+				<% end %>
+			</tr>
+			<tr>
+				<td colspan="#{@filter_sequence.size}"></td>
+			</tr>
+		</tbody>
+	</table>
+	</div>
+end

@@ -1,0 +1,13 @@
+This is the future home of the readme.
+
+To install:
+
+cd rails_app
+git submodule add gitetc. vendor/plugins/jqgrid_widget
+get submodule init
+get submodule update
+cd public/images
+ln -s vendor/plugins/jqgrid_widget/public/images/indicator.white.gif
+ln -s vendor/plugins/jqgrid_widget/public/javascripts/jqgrid_widget.js
+ln -s vendor/plugins/jqgrid_widget/public/stylesheets/fancytable.css
+
