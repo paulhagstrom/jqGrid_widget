@@ -154,3 +154,17 @@ function closeEditPanel(table) {
 		jQuery(this).remove();
 	});
 }
+
+// This supports the live search functionality
+var searchTimeOutHandler;
+function doLiveSearch(field,url,ev){
+	// var elem = ev.target||ev.srcElement;
+	if(searchTimeOutHandler)
+		clearTimeout(searchTimeOutHandler)
+	searchTimeOutHandler = setTimeout("gridReload('"+field+"','"+url+"');",450);
+}
+function gridReload(field,url){
+	var fv = jQuery("#"+field).val();
+	var fn = jQuery("#"+field).attr('name');
+	jQuery.getScript(url+"&livesearch="+field+"@"+fn+"@"+escape(fv));
+} 

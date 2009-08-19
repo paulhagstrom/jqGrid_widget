@@ -1,25 +1,54 @@
-<% col_width = (100/@filter_sequence.size).floor %>
-<div id="#{@jqgrid}_filter_div" class="ui-widget" style="text-align:center;" width="100%">
-	<table id="#{@jqgrid}_filter_table" class="ui-widget-content" width="100%">
-		<thead>
+<!-- TODO: I should put some of this in the helper -->
+<% col_width = (100/@filters.size).floor %>
+<div id="<%= @jqgrid_id %>_filter_div" class="ui-widget" style="text-align:center;" width="100%">
+	<table id="<%= @jqgrid_id %>_filter_table" class="layout_table ui-widget-content" style="width:100%;">
+		<thead id="<%= @jqgrid_id %>_filter_header">
 			<tr>
-				<% @filter_sequence.each do |filter| %>
-					<th class="ui-state-default" width="#{col_width}%">
-						#{link_to_event(@filters[filter][:name], :state => :_set_filter, :filter => filter)}
+				<% @filters.each do |filter| %>
+					<th class="ui-state-default jqgw-filter-category" style="width:<%= col_width %>%;"
+						id="<%= filter[0] %>__<%= @jqgrid_id %>_filter_category">
+						<%= filter[1][:name] %>
 					</th>
 				<% end %>
 			</tr>
 		</thead>
 		<tbody>
-			<tr>
-				<% @filter_sequence.each do |filter| %>
-				<td></td>
+			<tr width="100%">
+				<% @filters.each do |filter| %>
+				<td colspan="<%= @filters.size %>" id="<%= @jqgrid_id %>_<%= filter[0] %>_desc"></td>
 				<% end %>
-			</tr>
-			<tr>
-				<td colspan="#{@filter_sequence.size}"></td>
 			</tr>
 		</tbody>
 	</table>
-	</div>
-end
+	<table id="<%= @jqgrid_id %>_subfilter_table" class="layout_table ui-widget-content" style="width:100%;">
+		<% @filters.each do |filter| %>
+		<tbody style="display:none;" id="<%= @jqgrid_id %>_<%= filter[0] %>_filter_form">
+		<tr>
+			<td>
+				<%# I am not sure I really need form_to_event here, since I take over the submission.  But I can set the target this way. %>
+				<%= form_to_event :state => :_set_filter %>
+				<%= hidden_field_tag 'filter', filter[0] %>
+				<table class="layout_table">
+					<tr>
+					<% filter[1][:subfilters].to_a.each do |sf| %>
+						<td>
+						<fieldset>
+							<legend><%= sf[1][:name] %></legend>
+							<% sf[1][:options].to_a.each do |sfop| %>
+							<div style="float:left;"><!-- put this in the css later -->
+								<span><%= check_box_tag "subfilter[#{sf[0]}][#{sfop[0]}]" %><%= sfop[1] %>
+								(<span id="<%= @jqgrid_id %>_<%= filter[0] %>_<%= sf[0] %>_<%= sfop[0] %>_count"></span>)</span>
+								</div>
+							<% end %>
+						</fieldset>
+						</td>
+					<% end %>
+				</tr>
+				</table>
+				</form>
+			</td>
+		</tr>
+		</tbody>
+		<% end %>
+	</table>
+</div>

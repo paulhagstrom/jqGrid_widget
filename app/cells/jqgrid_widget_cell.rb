@@ -2,6 +2,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   include ActionView::Helpers::JavaScriptHelper 
   helper JqgridWidget::JqgridWidgetHelper
   require 'jquery_apotomo_helper_methods'
+  # include PatchApotomoWidgetIvars
 
   # Current state: There is now an advisor panel.  It has some quirks, and I don't think it can save yet.
   # Certinaly it doesn't show the kinds of information one might want, like counts of the advisor assignments for different advisors.
@@ -26,20 +27,17 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # TODO: and that may not be what I'm after.  Maybe I should introduce a "resting state"?
   # For the moment I'll leave it open like this, but I might want to pare it down.  (Though, why?)
   def transitions_all
-    [:_json_for_jqgrid, :_new_parent_record, :_new_parent_record_prepare, :_edit_panel, :_edit_panel_submit,
-      :_reflect_child_update, :_send_recordset, :_send_recordset_bundle, :_clear_recordset, :_set_filter,
-      :_filter_display, :_filter_counts]
+    [:_json_for_jqgrid, :_edit_panel, :_edit_panel_submit,
+      :_reflect_child_update, :_send_recordset, :_clear_recordset, :_set_filter,
+      :_filter_display, :_filter_counts, :_setup]
   end
   
   def transition_map
     {
       :_setup => ([:_json_for_jqgrid] + transitions_all).uniq,
       :_send_recordset => ([:_send_recordset] + transitions_all).uniq,
-      :_send_recordset_bundle => ([:_send_recordset_bundle] + transitions_all).uniq,
       :_clear_recordset => ([:_clear_recordset] + transitions_all).uniq,
       :_json_for_jqgrid => ([:_json_for_jqgrid] + transitions_all).uniq,
-      :_new_parent_record => ([:_new_parent_record_prepare] + transitions_all).uniq,
-      :_new_parent_record_prepare => ([:_new_parent_record_prepare] + transitions_all).uniq,
       :_edit_panel => ([:_edit_panel] + transitions_all).uniq,
       :_edit_panel_submit => ([:_edit_panel] + transitions_all).uniq,
       :_reflect_child_update => ([:_reflect_child_update] + transitions_all).uniq,
@@ -48,23 +46,28 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
       :_filter_counts => ([:_filter_counts] + transitions_all).uniq,
     }
   end
-
+  
   def scoped_model
     # just resource_model for the top widget; for children, use something like parent.records.contacts
+    # or, if you have a named scope, you can put that here.
     resource_model
   end
 
   # If this widget is supposed to immediately select the first item in a list, set this to true
   # (This is useful for lists that are not that likely to have multiple entries, but for which there are children)
-  def select_first_on_load
+  # This should be false if nothing should be selected automatically, 'unique' if only a unique record should be
+  # selected, 'exact' if an exact match to the search string should be selected, or just anything non-false
+  # if the first available record should be selected.
+  def select_on_load
     false
   end
   
+  # descendents_to_reload will reload all descendants if there is even a chance that a record could be selected.
   def descendants_to_reload
     d = []
     if children_to_render.size > 0
       children_to_render.each do |c|
-        if c.select_first_on_load
+        if c.select_on_load
           d += c.descendants_to_reload
         end
         d += [c.jqgrid_dom_id]
@@ -102,6 +105,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     JS
   end
   
+  # Assume all documentation-like comments may be out of date.
   # The _setup state is the start state. This will render the partial app/cells/{cell}/_setup.html.erb.
   # That partial should contain the widget placeholders (empty html table and div) and a setup call to jQGrid.
   # The helpers html_table_to_wire and wire_jqgrid can assist in this endeavor.
@@ -150,9 +154,10 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     # Several of these have been derived from instance methods, because I need them to be available
     # before the widget hits the _init state.
     # TODO: Reduce the number of these to the bare minimum, once I'm sure what I need.
+    # TODO: Or not, perhaps increasing them would be actually be better, for anything that need not be frozen.
     @jqgrid_id = jqgrid_dom_id
     @descendants_to_reload = descendants_to_reload
-    @select_first_on_load = select_first_on_load
+    @select_on_load = select_on_load
     @prefix = param(:prefix)
     @is_top_widget = param(:top_widget)
     @column_indices = @columns.map {|c| c[:index]}
@@ -164,26 +169,47 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     nil
   end
   
+  # eager_load is a helper for an otherwise kind of esoteric-looking modification you can make
+  # to the 'all' filter to include other tables in load_records.  You can do things like
+  # eager_load(:show_type) or eager_load({:employee => :person}).
+  # TODO: I might want to add a more global eager_load, so it doesn't need to be included in every
+  # TODO: ...filter.  Same for conditions.
+  # TODO: In the quest to reduce instance variables, note that I need @filters to be modifiable for this to work.
+  def eager_load(tables, filter = 'all')
+    @filters.assoc(filter)[1][:include] = [tables]
+  end
+  
   # add_column is a helper for constructing the table with _setup.
-  # field is required
-  # I'm not actually certain at the moment about what all the jqgrid options do.
-  # It will try to guess reasonable things based on the name, but you can override them.
+  # See http://www.secondpersonplural.ca/jqgriddocs/index.htm for more complete docs on jqGrid
+  # I have changed some of the defaults here from what jgGrid does natively.
+  # field is required, other things will be guessed if not provided.
+  # field should correspond to the name of a field in the model if you are going to be doing any sorting on it.
+  # And, if it doesn't, you'd better define a :custom for determining what its output should be.
+  # This corresponds to jqGrid's 'index' parameter. It is the field identifier that is passed back for sorting.
+  # Among the jqGrid options that are dealt with here:
+  # :name => 'field' (default: same as 'index'; it's not clear to me why these are differentiated)
   # :label => 'Column header' (default: humanized field)
+  # :width => width in pixels of the column (default: 100)
+  # :search => enable search (in principle) on the column (not implemented elsewhere yet) (default false)
+  # :sortable => enable sorting on the column (default false)
+  # There are also some others, which will be passed along if provided (e.g. editoptions), so long as they are
+  # formatted as Javascript.
+  # The jqGridWidget itself has a couple of internal column options as well.
   # :custom => :method_name (method in cell definition to provide output for the cell, via self.send :method_name)
   # :panel => name of partial to render for a cell_select form, or '' for no trigger there.
-  # :row_panel => true if the partial is supposed to render under the row (otherwise will render in the title area)
-  def add_column(field, opts = {})
-    opts[:field] = field
-    opts[:name] = "'#{field}'"
-    opts[:label] ||= field.humanize
-    opts[:index] ||= "'#{field}'"
-    opts[:label] = "'#{opts[:label]}'"
-    opts[:width] ||= 100
-    opts[:search] = (opts[:search] && opts[:search] != 'false') ? 'true' : 'false'
-    opts[:sortable] = (opts[:sortable] && opts[:sortable] != 'false') ? 'true' : 'false'
-    opts[:panel] ||= ''
-    opts[:panel_under_row] = false
-    @columns << opts
+  # :panel_under_row => true if the edit panel should render under the row (otherwise it will be in the title area)
+  def add_column(field, options = {})
+    # jqGrid options
+    options[:index] = field
+    options[:name] ||= field
+    options[:label] ||= field.humanize
+    options[:width] ||= 100
+    options[:search] = false unless options.has_key?(:search)
+    options[:sortable] = false unless options.has_key?(:sortable)
+    # jqGridWidget options
+    options[:panel] ||= ''
+    options[:panel_under_row] = false unless options.has_key?(:panel_under_row)
+    @columns << options
   end
     
   # This is the state called as the jQGrid data source.  The data of this widget and its children are bundled together
@@ -197,20 +223,52 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # TODO: It should be possible to add an id=@record.id to the conditions load_record uses to determine whether
   # the selection meets the new criteria, and if so, jump to the page it is on.  I of course need to make it possible
   # to leave that page, but I think if you do leave the page, then the selection should be reset.
+  # TODO: Figure out how I can make it jump if the search string is an exact match.
   def _send_recordset(children_unaware = true, inject_js = '')
-    inject_js += js_push_json_to_cache(_json_for_jqgrid) + js_reload_jqgrid
+    records = load_records
+    inject_js += js_push_json_to_cache(_json_for_jqgrid(records)) + js_reload_jqgrid
     # inject_js += js_push_json_to_cache(_json_for_jqgrid) + js_reload_jqgrid
     # If the children are aware, that means we arrived here just to do a refresh, no change in the filter.
     # However, that could still affect the records included in the parent recordset (if the child's change
     # means that the parent no longer meets the criteria).
     # Check to see if the selected record is still there.  If it is, nothing particular needs to be done,
     # jqGrid will maintain the UI selection.  If it's gone, we need to alert the children.
-    selection_survived = (@record && @records.include?(@record))
+    # If select on load is set, either the first record or the unique record will be loaded.
+    # Jump also if the setting is 'unique' but the search string would return an exact match among the records.
+    # TODO: This is kind of clumsy, got a lot of conditionals here.
+    # TODO: This isn't quite the right behavior.  It should check for an exact match even if the selection survived.
+    # TODO: This also doesn't work when the exact match is off the page.  E.g., searching for TV show "er".
+    selection_survived = (@record && records.include?(@record))
     unless selection_survived
-      if @select_first_on_load && @records.size > 0
-        select_record(@records.first.id) # This posts a :recordSelected event to the children
+      if @select_on_load
+        if @select_on_load == 'unique'
+          if records.size > 1
+            if @livesearch
+              # puts "%%%%%%%%%%%%%% Unique check for exact match. Match to [#{@livesearch}] on [#{@livesearch_field}]"
+              records.each do |r|
+                # puts "%% record #{r.id}, attributes: #{r.attributes.inspect}"
+                if r.attributes[@livesearch_field].downcase == @livesearch.downcase
+                  select_record(r.id)
+                  selection_survived = true
+                end
+              end
+            end
+          else
+            if records.size == 1
+              select_record(records.first.id)
+                selection_survived = true
+              end
+          end
+        else
+          if records.size > 0
+            select_record(records.first.id)
+            selection_survived = true
+          end
+        end
+        #   ((@select_on_load == 'unique' && records.size == 1) || (@select_on_load != 'unique' && records.size > 0))
+        # select_record(records.first.id) # This posts a :recordSelected event to the children
         # inject_js += "console.log('#{@jqgrid_id}: recordSelected: #{@record.id}.');"
-        selection_survived = true
+        # selection_survived = true
       else
         @record = resource_model.new
         # inject_js += "console.log('#{@jqgrid_id}: recordUnselected.');"
@@ -253,54 +311,86 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   end
   
   # This is a state that returns the JSON data for the recordset.
-  # The way I have it set up right now, this is never called directly from outside, though it in principle
-  # could be if for some reason one wanted to bypass the cache.
-  def _json_for_jqgrid
-    @page = (param(:page) || @page || 1).to_i
-    @rows_per_page = (param(:rows) || @rows_per_page || 20).to_i
-    @sidx = (param(:sidx) || @sidx || 'name')
-    @sord = (param(:sord) || @sord || 'asc')
-    @search = (param(:_search) || @search || '')
-    @livesearch = (param(:_livesearch) || @livesearch || '')
-    load_records
+  # It is no longer suitable for serving as a jqGrid data source because it requires the records to
+  # have been loaded first (as well as the pagination parameters)
+  def _json_for_jqgrid(records)
+    # @page = (param(:page) || @page || 1).to_i
+    # @rows_per_page = (param(:rows) || @rows_per_page || 20).to_i
+    # @sidx = (param(:sidx) || @sidx || 'name')
+    # @sord = (param(:sord) || @sord || 'asc')
+    # @search = (param(:_search) || @search || '')
+    # @livesearch = (param(:_livesearch) || @livesearch || '')
+    # records = load_records
     json = {
       :page => @page,
       :total => @total_pages, 
       :records => @total_records,
-      :rows => @grid_rows
+      :rows => grid_rows(records)
     }.to_json
+  end
+  
+  # Turn @records into something appropriate for the _json_for_jqgrid method
+  def grid_rows(records)
+    records.collect do |r|
+      {
+        :id => r.id,
+        :cell => @columns.collect do |c|
+          c[:custom] ? self.send(c[:custom], r) : (r.attributes)[c[:index]]
+        end
+      }
+    end
+  end
+  
+  # Note that I don't reset @livesearch here, which allows it to persist
+  def get_paging_parameters
+    @page = (param(:page) || @page || 1).to_i
+    @rows_per_page = (param(:rows) || @rows_per_page || 20).to_i
+    @sidx = (param(:sidx) || @sidx || 'name')
+    @sord = (param(:sord) || @sord || 'asc')
+    # @search = (param(:_search) || @search || '')
+    livesearch = param(:livesearch)
+    if livesearch
+      if (livesearch_split = livesearch.split('@',3)).size > 1
+        if livesearch_split[0][0..(@jqgrid_id.size-1)] == @jqgrid_id
+          @livesearch_field = livesearch_split[1]
+          @livesearch = livesearch_split[2]
+        end
+      end
+    end
   end
   
   # This is the actual method that queries the database.
   # TODO: This is not working, it seems to be returning too many results.
   def load_records
+    get_paging_parameters
     @filter, @subfilter, find_include, find_conditions, @total_records = filter_prepare
     sord = (@sord == 'desc') ? 'DESC' : 'ASC'
-    sidx = (@column_indices.include?(@sidx) ? @sidx : @columns[0][:field])
+    sidx = (@column_indices.include?(@sidx) ? @sidx : @columns[0][:index])
     find_order = "#{sidx} #{sord}"
     if @rows_per_page > 0
-      @total_pages = (@total_records > 0 && @rows_per_page > 0) ? @total_records/@rows_per_page : 0
+      @total_pages = (@total_records > 0 && @rows_per_page > 0) ? 1 + (@total_records/@rows_per_page).ceil : 0
       @page = @total_pages if @page > @total_pages
+      @page = 1 if @page < 1
       @start_offset = @rows_per_page*@page - @rows_per_page
     else
       @total_pages = 1
       @rows_per_page = @total_records
       @start_offset = 0
     end
-    # if @livesearch
-    #   find_conditions[0] += ' and name LIKE ?'
-    #   find_conditions << "%#{param(:name)}%"
-    # end
-    @records = scoped_model.find(:all, :include => find_include, :conditions => find_conditions,
-      :limit => @rows_per_page, :offset => @start_offset, :order => find_order)
-    @grid_rows = @records.collect do |r|
-      {
-        :id => r.id,
-        :cell => @columns.collect do |c|
-          c[:custom] ? self.send(c[:custom], r) : (r.attributes)[c[:field]]
-        end
-      }
+    if @start_offset < 0
+      puts "??Why is start_offset negative?"
+      @start_offset = 0
     end
+    if @livesearch
+      # Allow several partial matches by splitting the search string
+      @livesearch.split(' ').each do |substring|
+        find_conditions[0] += " and #{@livesearch_field} LIKE ?"
+        find_conditions << "%#{substring}%"
+      end
+    end
+    puts "Rows per page #{@rows_per_page}, offset #{@start_offset}, find_order #{find_order}, find_conditions #{find_conditions}, find_include #{find_include}."
+    scoped_model.find(:all, :include => find_include, :conditions => find_conditions,
+      :limit => @rows_per_page, :offset => @start_offset, :order => find_order)
   end
   
   # Prepare the instance variables for load_record, using the filter, returns things
@@ -311,14 +401,14 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     subfilter ||= {}
     filter = @filters.assoc(verified_filter)[1]
     # I had to do this in this kind of funny way to avoid actually modifying @filters.
-    find_conditions = []
+    find_conditions = filter.has_key?(:conditions) ? filter[:conditions] : ['1']
     find_include = []
-    find_conditions += filter[:conditions] if filter.has_key?(:conditions)
+    # find_conditions += filter[:conditions] if filter.has_key?(:conditions)
     find_include += filter[:include] if filter.has_key?(:include)
     subfilter.each do |key, sf|
       # TODO: Could use some error checking in here.
       fsf = filter[:subfilters].assoc(key)[1]
-      find_conditions[0] += ' and ' + fsf[:conditions]
+      find_conditions[0] += (' and ' + fsf[:conditions]) if fsf.has_key?(:conditions)
       find_conditions << sf.keys
       find_include << fsf[:include] if fsf.has_key?(:include)
     end
@@ -335,7 +425,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     else
       panel = @columns[param(:panel).to_i][:panel]
     end
-    state_view! panel
+    render :view => panel
+    # state_view! panel
   end
 
   def _edit_panel_submit
@@ -382,7 +473,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
 
   # This redraws the whole filter div
   def _filter_display
-    state_view! '_filters'
+    render :view => '_filters'
+    # state_view! '_filters'
   end
   
   # Return counts for all of the filter options
@@ -414,466 +506,4 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   end
 
 end
-
-#   
-#   # override this to construct the list out of the passed-in records
-#   
-#   def construct_list(records = [])
-#     records_formatted = []
-#     return records_formatted
-#   end
-#   
-#   # This should be called when a loadList event is posted
-#   def _load_list
-#     page, limit, sidx, sord, search, livesearch = 
-#       params[:page].to_i, params[:rows].to_i, params[:sidx], params[:sord], params[:_search], params[:_livesearch]
-#     sidx ||= '1'
-#     sord ||= 'asc'
-#     if (search == 'true' || livesearch == 'true')
-#       records = Person.find(:all, :order => sidx + ' ' + sord, :conditions => ['name LIKE ?', "%#{params[:name]}%"])      
-#     else
-#       records = Person.find(:all, :order => sidx + ' ' + sord)
-#     end
-#     count = records.size
-#     total_pages = (count > 0 and limit > 0) ? count/limit : 0
-#     page = total_pages if page > total_pages
-#     start = limit*page - limit
-#     records_formatted = construct_list(records)
-#     @json_out = {:page => page, :total => total_pages, :records => count, :rows => records_formatted}
-#     # $SQL = "SELECT a.id, a.invdate, b.name, a.amount,a.tax,a.total,a.note FROM invheader a, clients b WHERE a.client_id=b.client_id ORDER BY $sidx $sord LIMIT $start , $limit";
-#     # respond_to do |format|
-#     #   format.json {render :json => @json_out}
-#     # end
-#     # How am I going to get this to render json?  I'll hope it is asking for it.
-#     return @json_out.to_json
-#   end
-#   
-#   # # If this widget has another of this type of widget in its detail panel, some things can be dealt with
-#   # # automatically if they are listed here.  Format: {'author' => :author_id, 'publisher' => :publisher_id}
-#   # # TODO: Maybe I can get it to actually use the models and associations, that would be better than hardwiring it.
-#   # def child_panels
-#   #   {}
-#   # end
-# 
-#   # # The filters have the form key => {:name => 'Display Name', :conditions => conditions clause for find}
-#   # def filters_available
-#   #   {
-#   #     'all' => {:name => 'All', :conditions => nil},
-#   #   }
-#   # end
-# 
-#   # # The filter default is the key of the filter to use if none has been specifically selected
-#   # def filter_default
-#   #   'all'
-#   # end
-# 
-#   # This is the :include parameter for the find that loads the recordset if using load_records below
-#   # If you have related subtables of author and publisher, for example, then you can do this:
-#   # def resources_include
-#   #   [:author, :publisher]
-#   # end
-#   # def resources_include
-#   #   nil
-#   # end
-# 
-#   # This is the :order parameter for the find that loads the recordset if using load_records below
-#   # def resources_default_order
-#   #   'authors.name, books.title'
-#   # end
-#   # def resources_default_order
-#   #   nil
-#   # end
-# 
-#   # This loads the records in order to display the list, uses parameters set above
-#   def load_records(conditions = nil)
-#     find_params = {:conditions => conditions}
-#     find_params.merge!({:include => resources_include}) if resources_include
-#     find_params.merge!({:order => resources_default_order}) if resources_default_order
-#     @records = resource_model.find(:all, find_params)
-#   end
-# 
-#   # This should be a list of fields in the table that will be updated from the form fields
-#   # Format: [:title, :author_id, :publisher_id]
-#   # def attributes_to_update
-#   #   []
-#   # end
-# 
-#   # The set of things that reveal and hide themselves depending on demand.  Default is that all start and stay visible.
-#   # But if the detail panel starts hidden and should pop out, set, e.g., :detail => ['div_containing', false]
-#   # def hud_panels
-#   #   {}
-#   # end
-# 
-#   # These Javascript calls reveal and dismiss HUD panels.
-#   # They are collected together here in case something other than Prototype/Scriptalicious is desired
-#   # def js_reveal(element = 'div_' + self.name, duration = 0.3, queue = nil)
-#   #   queue_parm = queue ? ", queue: {position: '" + queue + "', scope: '" + element + "'}" : ''
-#   #   "Effect.SlideDown('#{element}', {duration: #{duration}#{queue_parm}});"
-#   # end
-#   # 
-#   # def js_dismiss(element = 'div_' + self.name, duration = 0.3, queue = nil)
-#   #   queue_parm = queue ? ", queue: {position: '" + queue + "', scope: '" + element + "'}" : ''
-#   #   "Effect.SlideUp('#{element}', {duration: #{duration}#{queue_parm}});"
-#   # end
-# 
-#   # These are the standard transitions, but you can add to them by calling
-#   # super.merge!({:other => [:transitions]}).
-#   # def transition_map
-#   #   frame_transitions.merge(
-#   #   list_panel_transitions.merge(
-#   #   detail_panel_transitions.merge(
-#   #   filter_panel_transitions.merge(
-#   #   selected_panel_transitions.merge(
-#   #   message_panel_transitions
-#   #   )))))
-#   # end
-# 
-#   # def transition_map
-#   #   {
-#   #     :index => [:index, :_load_list],
-#   #     :_load_list => [:index, :_load_list]
-#   #   }
-#   # end
-#   
-#   # Basic start state
-#   
-#   def index
-#     load_records
-#     nil
-#   end
-# 
-#   # Containing frame states.
-# 
-#   # def frame_transitions
-#   #   {
-#   #     :_frame_start => [:_frame],
-#   #     :_frame => [:_frame, :_frame_start],
-#   #   }
-#   # end
-#   # 
-#   # def _frame_start
-#   #   @editing_mode = false
-#   #   @hud_state = hud_panels
-#   #   jump_to_state :_frame
-#   # end
-#   # 
-#   # def _frame
-#   #   nil
-#   # end
-# 
-# 
-#   # List panel states
-#   # The list panel displays a recordset based on the currently selected filter
-# 
-#   # def list_panel_transitions
-#   #   {
-#   #     :_list_start => [:_list],
-#   #     :_list_reveal => [:_list],
-#   #     :_list_dismiss => [:_list],
-#   #     :_list => [:_list, :_list_start, :_list_reveal, :_list_dismiss],
-#   #   }
-#   # end
-#   # 
-#   # def _list_start
-#   #   jump_to_state :_list
-#   # end
-# 
-#   # def _list
-#   #   # Consult the filter panel to find what the current filter is, then load records accordingly
-#   #   filter_panel = parent[parent.name + '_filter']
-#   #   load_records(filter_panel.filters[filter_panel.filter][:conditions])
-#   #   nil
-#   # end
-# 
-#   # def _list_reveal
-#   #   hud_reveal(:list)
-#   #   jump_to_state :_list
-#   # end
-#   # 
-#   # def _list_dismiss
-#   #   hud_dismiss(:list)
-#   #   jump_to_state :_list
-#   # end
-# 
-# 
-#   # Selected panel states
-#   # The selected panel is a specialized display panel used within a detail panel of a parent.
-#   # When the parent calls load_record, the selected panel's :id_from_parent parameter is set.
-#   # When a select link is clicked on a subordinate list, this passes (as :id) to _selected_change
-# 
-#   # def selected_panel_transitions
-#   #   {
-#   #     :_selected_start => [:_selected],
-#   #     :_selected_update => [:_selected],
-#   #     :_selected_change => [:_selected_update],
-#   #     :_selected => [:_selected, :_selected_start, :_selected_update, :_selected_change],
-#   #   }
-#   # end
-#   # 
-#   # def _selected_start
-#   #   @original = nil
-#   #   jump_to_state :_selected_update
-#   # end
-#   # 
-#   # def _selected
-#   #   @dirty = (@original && @original.id != @record.id)
-#   #   nil
-#   # end
-#   # 
-#   # def _selected_update
-#   #   load_record(@selected_id)
-#   #   @original ||= @record
-#   #   jump_to_state :_selected
-#   # end
-#   # 
-#   # def _selected_change
-#   #   @selected_id = param(:id)
-#   #   jump_to_state :_selected_update
-#   # end
-# 
-# 
-#   # Filter panel states
-#   # The filter panel shows the filter options and current filter.
-# 
-#   # def filter_panel_transitions
-#   #   {
-#   #     :_filter_start => [:_filter],
-#   #     :_filter_update => [:_filter],
-#   #     :_filter => [:_filter, :_filter_start, :_filter_update],
-#   #   }
-#   # end
-#   # 
-#   # def _filter_start
-#   #   @filters = filters_available
-#   #   @filter = filter_default
-#   #   jump_to_state :_filter
-#   # end
-#   # 
-#   # def _filter
-#   #   nil
-#   # end
-#   # 
-#   # def _filter_update
-#   #   @filter = param(:new_filter) || filter_default
-#   #   trigger(:filterChanged)
-#   #   jump_to_state :_filter
-#   # end
-# 
-#   # Message panel states
-#   # The message panel is just for showing result messages in a way that doesn't rely on any other panel being visible.
-#   # The message is stored in the frame (using post_message below), and once displayed, it is erased.
-# 
-#   # def message_panel_transitions
-#   #   {
-#   #     :_message_start => [:_message],
-#   #     :_message => [:_message, :message_start],
-#   #   }
-#   # end
-#   # 
-#   # def _message_start
-#   #   @message = ''
-#   #   jump_to_state :_message
-#   # end
-#   # 
-#   # def _message
-#   #   @message_to_display = @message
-#   #   @message = ''
-#   #   hud_reveal(:message, 0.3, 'front')
-#   #   hud_dismiss(:message, 1.0, 'end')
-#   #   nil
-#   # end
-# 
-# 
-#   # Detail panel states
-#   # The detail panel is the most complicated one, it handles the bulk of the action here.
-#   # The frame holds the current id and whether we are in editing mode.
-# 
-#   # def detail_panel_transitions
-#   #   {
-#   #     :_detail_start => [:_detail],
-#   #     :_show => [:_detail],
-#   #     :_edit => [:_detail],
-#   #     :_update => [:_detail_dismiss, :_show],
-#   #     :_new => [:_detail], 
-#   #     :_delete => [:_detail],
-#   #     :_detail_dismiss => [:_detail],
-#   #     :_detail => [:_detail, :_detail_start, :_show, :_edit, :_update, :_new, :_delete, :_detail_dismiss],
-#   #   }
-#   # end
-#   # 
-#   # def _detail_start
-#   #   new_record
-#   #   parent.editing_mode = false
-#   #   jump_to_state :_detail
-#   # end
-#   # 
-#   # def _detail
-#   #   @editing = parent.editing_mode
-#   #   nil
-#   # end
-#   # 
-#   # def _show
-#   #   load_record(param(:id))
-#   #   hud_reveal(:detail)
-#   #   parent.editing_mode = false
-#   #   show_child_panels
-#   #   jump_to_state :_detail
-#   # end
-# 
-#   # Tell the child panels to move to their record matching the one specified by the just-shown parent
-#   # def show_child_panels
-#   #   child_panels.each do |cp, field_id|
-#   #     parent[cp][cp + '_detail'].set_local_param(:id, @record[field_id])
-#   #     parent[cp][cp + '_detail'].trigger(:redraw)
-#   #     parent[cp][cp + '_detail'].trigger(:dismissList)
-#   #   end
-#   # end
-#   # 
-#   # def _edit
-#   #   load_record(parent.param(:id))
-#   #   hud_reveal(:detail)
-#   #   parent.editing_mode = true
-#   #   @return_to_show = parent.param(:from_show)
-#   #   edit_child_panels
-#   #   jump_to_state :_detail
-#   # end
-#   # 
-#   # def edit_child_panels  
-#   #   child_panels.keys.each do |cp|
-#   #     parent[cp][cp + '_detail'].trigger(:revealList)
-#   #     parent[cp][cp + '_detail'].trigger(:dismissPanel)
-#   #   end
-#   # end
-#   # 
-#   # def _update
-#   #   update_from_children
-#   #   @record.update_attributes(self.update_attributes_hash)
-#   #   @record.save
-#   #   @record.reload
-#   #   post_message "Changes saved."
-#   #   trigger(:recordChanged)
-#   #   jump_to_state :_show if @return_to_show
-#   #   jump_to_state :_detail_dismiss
-#   # end
-# 
-#   # When an update occurs, we need to fetch the values from the children
-#   # def update_from_children
-#   #   child_panels.each do |cp, field_id|
-#   #     @record[field_id] = self[cp + '_selected'].record.id
-#   #   end
-#   # end
-#   # 
-#   # def _new
-#   #   new_record
-#   #   hud_reveal(:detail)
-#   #   parent.editing_mode = true
-#   #   edit_child_panels
-#   #   jump_to_state :_detail
-#   # end
-#   # 
-#   # def _delete
-#   #   if (doomed = find_record(parent.param(:id)))
-#   #     if doomed.id == @record.id
-#   #       new_record
-#   #       hud_dismiss(:detail)
-#   #     end
-#   #     doomed.destroy
-#   #     post_message "Record deleted."
-#   #     trigger(:recordChanged)
-#   #   end
-#   #   jump_to_state :_detail
-#   # end
-#   # 
-#   # def _detail_dismiss
-#   #   hud_dismiss(:detail)
-#   #   jump_to_state :_detail
-#   # end
-# 
-# 
-#   # Other helpers
-# 
-#   def find_record(id = nil)
-#     resource_model.find_by_id(id)
-#   end
-# 
-#   def load_record(id = nil)
-#     if @record = find_record(id)
-#       load_child_selected_records
-#     else
-#       new_record
-#     end
-#   end
-# 
-#   def load_child_selected_records
-#     child_panels.each do |cp, id_field|
-#       self[cp + '_selected'].selected_id = @record[id_field]
-#     end
-#   end
-# 
-#   def new_record
-#     @record = resource_model.new
-#     load_child_selected_records
-#   end
-# 
-#   def update_attributes_hash
-#     attrs = {}
-#     self.attributes_to_update.each do |att|
-#       attrs[att] = param(att)
-#     end
-#     attrs
-#   end
-# 
-#   def resource_model
-#     Object.const_get param(:resource).classify
-#   end
-# 
-#   def resource_name
-#     param(:resource)
-#   end
-#   
-#   # def js_emit
-#   #   js_emit = @js_emit || ''
-#   #   @js_emit = ''
-#   #   js_emit
-#   # end
-#   # 
-#   # def set_js_emit(to_emit)
-#   #   set_local_param(:js_emit, (local_param(:js_emit) || '') + to_emit)
-#   # end
-#   # 
-#   # def get_js_emit
-#   #   js_emit = local_param(:js_emit)
-#   #   set_local_param(:js_emit, nil)
-#   #   js_emit
-#   # end
-#   # 
-#   # def post_message(message = '')
-#   #   parent[parent.name + '_message'].message = message
-#   #   trigger(:messagePosted)
-#   # end
-# 
-#   # The HUD reveal and dismiss helpers will set up Javascript to hide or reveal certain panels.
-#   # The state of each panel is remembered, so that re-revealing or re-dismissing won't do anything.
-#   # The frame keeps track of the state of each panel, and they are assumed to be called by the child panels.
-#   # If there is no entry for the panel in the HUD array, it will also do nothing.
-# 
-#   # def hud_reveal(panel, duration = 0.3, queue = nil)
-#   #   hud_control(panel, false, duration, queue)
-#   # end
-#   # 
-#   # def hud_dismiss(panel, duration = 0.3, queue = nil)
-#   #   hud_control(panel, true, duration, queue)
-#   # end
-#   # 
-#   # def hud_control(panel, dismiss = false, duration = 0.3, queue = nil)
-#   #   @js_emit ||= ''
-#   #   if hud = parent.hud_state[panel]
-#   #     if hud[1] == dismiss
-#   #       @js_emit = @js_emit + (dismiss ? js_dismiss(hud[0], duration, queue) : js_reveal(hud[0], duration, queue))
-#   #       hud[1] = !dismiss
-#   #       parent.hud_state.merge!({panel => hud})
-#   #     end
-#   #   end
-#   # end
-# end
 

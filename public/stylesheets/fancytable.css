@@ -14,6 +14,10 @@
 	border-spacing: 0px;
 }
 
+.layout_table td {
+	vertical-align: top;
+}
+
 /* Make the widget overlay sit on top (to dim it out while loading is happening) */
 
 .ui-widget-overlay {

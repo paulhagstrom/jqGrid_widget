@@ -3,6 +3,7 @@ class JqgridWidgetController < ApplicationController
   include JqueryApotomoControllerMethods
   include Apotomo::WidgetShortcuts
   require 'jquery_apotomo_helper_methods'
+  # include PatchApotomoEvents
   
   protected
   

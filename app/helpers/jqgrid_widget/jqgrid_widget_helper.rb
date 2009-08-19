@@ -27,38 +27,37 @@ module JqgridWidget::JqgridWidgetHelper
   # :height => height of the grid in pixels
   # :initial_sort => something, I think it should correspond to a database table field.  TODO: Figure this out
   # :add_button => something other than false if we want to add an add button
-  def wire_jqgrid(opts = {})
-    opts[:pager] ||= {}
-    opts[:pager_id] ||= @jqgrid_id + '_pager'
-    opts[:height] ||= 150
-    # opts[:enable_panel] ||= false
-    # opts[:enable_cell_panel] ||= false
-    opts[:collapsed] ||= false #(options[:collapsed] != false) instead to make it default to true
-    # opts[:url] ||= url_for(address_to_event({:state => '_send_recordset', :escape => false}, :data))
+  def wire_jqgrid(options = {})
+    options[:pager] ||= {}
+    options[:pager_id] ||= @jqgrid_id + '_pager'
+    options[:height] ||= 150
+    # options[:enable_panel] ||= false
+    # options[:enable_cell_panel] ||= false
+    options[:collapsed] ||= false #(options[:collapsed] != false) instead to make it default to true
+    # options[:url] ||= url_for(address_to_event({:state => '_send_recordset', :escape => false}, :data))
     # I have to make this not be a data call, because I need it to be able to react to rowClicks.
     # It would have been more convenient as a data call.  But I don't think data calls will bundle the child responses.
-    # opts[:url] ||= url_for(address_to_event({:state => '_send_recordset', :bundle => 'yes', :escape => false}))
-    opts[:url] ||= url_for(address_to_event({:state => '_send_recordset', :escape => false}))
-    opts[:caption] ||= @caption || 'Records'
-    opts[:initial_sort] ||= @columns[0][:field]
-    opts[:add_button] ||= true
+    # options[:url] ||= url_for(address_to_event({:state => '_send_recordset', :bundle => 'yes', :escape => false}))
+    options[:url] ||= url_for(address_to_event({:state => '_send_recordset', :escape => false}))
+    options[:caption] ||= @caption || 'Records'
+    options[:initial_sort] ||= @columns[0][:index]
+    options[:add_button] ||= true
 
-    col_names, col_model = wire_jqgrid_columns
+    # col_names, col_model = wire_jqgrid_columns
     empty_table = (@is_top_widget == 'yes') ? "jQuery('##{@jqgrid_id}');" : js_push_json_to_cache(empty_json)
     javascript_tag <<-JS
     #{empty_table}
     jQuery("##{@jqgrid_id}").jqGrid({
-      datatype: function(pdata) { retrieveJSON('##{@jqgrid_id}','#{opts[:url]}',pdata); },
-      height: #{opts[:height]},
-      colNames:[#{col_names}],
-      colModel:[#{col_model}],
-      #{wire_jqgrid_pager(opts)}
+      datatype: function(pdata) { retrieveJSON('##{@jqgrid_id}','#{options[:url]}',pdata); },
+      height: #{options[:height]},
+      colModel:[#{wire_jqgrid_columns}],
+      #{wire_jqgrid_pager(options)}
       viewrecords: true,
       scrollrows: true,
-      pager: jQuery('##{opts[:pager_id]}'),
-      sortname: '#{opts[:initial_sort]}',
+      pager: jQuery('##{options[:pager_id]}'),
+      sortname: '#{options[:initial_sort]}',
       loadui: 'block',
-      hiddengrid: #{opts[:collapsed] ? 'true' : 'false'},
+      hiddengrid: #{options[:collapsed] ? 'true' : 'false'},
       #{wire_jqgrid_cellselect}
       #{wire_jqgrid_rowbeforeselect}
       #{wire_jqgrid_rowselect}
@@ -67,9 +66,9 @@ module JqgridWidget::JqgridWidgetHelper
       viewsortable: true,
       //toolbar: [true,'top'],
       //loadonce: true,
-      caption: "#{opts[:caption]}"
-    }).navGrid('##{opts[:pager_id]}', {edit:false,add:false,del:true,search:false,refresh:false})
-    #{wire_jqgrid_add_button(opts)}
+      caption: "#{options[:caption]}"
+    }).navGrid('##{options[:pager_id]}', {edit:false,add:false,del:true,search:false,refresh:false})
+    #{wire_jqgrid_add_button(options)}
     ;
     // make the whole titlebar expland and collapse the table
     activateTitleBar('##{@jqgrid_id}');
@@ -79,24 +78,32 @@ module JqgridWidget::JqgridWidgetHelper
   end
   
   # Prepare the columns model
+  # See http://www.secondpersonplural.ca/jqgriddocs/index.htm
+  # This turned out to be a pretty trivial method once everything got put into make_js.
   def wire_jqgrid_columns
-    col_names = (@columns.map {|c| "#{c[:label]}"}).join(',')
-    col_model = (@columns.map {|c|
-      '{' + ((c.keys - [:custom, :field, :panel, :panel_under_row]).map {|k|
-        "#{k.to_s}:#{c[k]}"
-        }).join(',') + '}'
-      }).join(',')
-    return [col_names, col_model]
+    # Don't emit jqGridWidget options, just jqGrid options
+    (@columns.map {|c| make_js(c.dup.delete_if{|k,v| [:custom, :panel, :panel_under_row].include?(k)})}).join(',')
+  end
+  
+  # Turn Ruby datatypes into emittable Javascript
+  # Cf. array_or_string_to_javascript, is there an official way to do this already built in?
+  # I couldn't get case/when to work here for some reason
+  def make_js(thing)
+    (thing.class == Hash) ? '{' + (thing.map{|k,v| k.to_s + ':' + make_js(v)}).join(',') + '}' :
+      (thing.class == Array ? '[' + (thing.map{|v| make_js(v)}).join(',') + ']' :
+        (thing.class == String ? "'#{thing}'" : thing.to_s
+        )
+      )
   end
   
   # Prepare the pager options
-  def wire_jqgrid_pager(opts)
-    if opts[:pager].keys.size > 0
+  def wire_jqgrid_pager(options)
+    if options[:pager].keys.size > 0
       return <<-JS
        	pginput: true,
       	pgbuttons: true,
-      	rowList:[#{opts[:pager][:rows_options] || ''}],
-      	rowNum:#{opts[:pager][:rows] || 20},
+      	rowList:[#{options[:pager][:rows_options] || ''}],
+      	rowNum:#{options[:pager][:rows] || 20},
       JS
     else
       return <<-JS
@@ -108,10 +115,10 @@ module JqgridWidget::JqgridWidgetHelper
   end
   
   # Add an "add" button
-  def wire_jqgrid_add_button(opts)
-    return '' unless opts[:add_button]
+  def wire_jqgrid_add_button(options)
+    return '' unless options[:add_button]
     return <<-JS
-        .navButtonAdd('##{opts[:pager_id]}',{caption:'',title:'Add new record',buttonicon:'ui-icon-plus',
+        .navButtonAdd('##{options[:pager_id]}',{caption:'',title:'Add new record',buttonicon:'ui-icon-plus',
         	onClickButton:function(){
             #{wire_jqgrid_rowselect_panel(:add)}
           } 
@@ -270,32 +277,36 @@ module JqgridWidget::JqgridWidgetHelper
   end
   
   # Provide the HTML for a live search field
-  def html_live_search_to_wire(table = @jqgrid_id, prompt = 'Search', field='name')
+  def html_live_search_to_wire(field, prompt = 'Search', table = @jqgrid_id)
+    submit_search_url = url_for(address_to_event({:state => '_send_recordset', :escape => false}))
     <<-HTML
-    <form id="#{table}_live_search" action="#">
-      #{prompt}: <input type="text" name="#{field}" autocomplete="off" value="" id="#{table}_live_search_field" onkeydown="doLiveSearch('#{table}',arguments[0]||event)" />
+    <form id="#{table}_#{field}_search_form" action="#">
+      #{prompt}: <input type="text" name="#{field}" autocomplete="off" value="" id="#{table}_#{field}_search" onkeydown="doLiveSearch('#{table}_#{field}_search','#{submit_search_url}', arguments[0]||event)" />
     </form>    
     HTML
   end
 
-  # TODO: This is not ready yet. I have yet to see how to communicate the live search string to the recordset loader
-  def wire_live_search
-    javascript_tag <<-JS
-    var timeoutHnd;
-    function doSearch(table,ev){
-      // var elem = ev.target||ev.srcElement;
-      if(timeoutHnd)
-        clearTimeout(timeoutHnd)
-      timeoutHnd = setTimeout(gridReload(table),300);
-    }
-    function gridReload(table){
-      var fv = jQuery("##{table}_live_search_field").val();
-      var fn = jQuery("##{table}_live_search_field").attr('name');
-      jQuery("##{table}").trigger("reloadGrid");
-      //jQuery("##{table}").setGridParam({url:"people/load_person_table?_livesearch=true&"+fn+"="+fv,page:1}).trigger("reloadGrid");
-    } 
-    JS
-  end
+  # TODO: At the moment it isn't possible to have two live searches on the same screen, at least not without redefining this.
+  # This should probably go into the main .js file, and have the url passed by the form instead.
+  # FIXME: This isn't working quite as expected. The value searched for seems to be the one prior to the keypress.
+  # TODO: Also, add some way to "go when unique"
+  # def wire_live_search
+  #   submit_search_url = url_for(address_to_event({:state => '_send_recordset', :escape => false}))
+  #   javascript_tag <<-JS
+  #   var timeoutHnd;
+  #   function doLiveSearch(table,ev){
+  #     // var elem = ev.target||ev.srcElement;
+  #     if(timeoutHnd)
+  #       clearTimeout(timeoutHnd)
+  #     timeoutHnd = setTimeout("gridReload('"+table+"');",450);
+  #   }
+  #   function gridReload(table){
+  #     var fv = jQuery("##{@jqgrid_id}_live_search_field").val();
+  #     var fn = jQuery("##{@jqgrid_id}_live_search_field").attr('name');
+  #     jQuery.getScript("#{submit_search_url}"+"&livesearch="+table+"@"+fn+"@"+escape(fv));
+  #   } 
+  #   JS
+  # end
   
   def cancel_button(text = 'Cancel')
     submit_tag "Cancel", :onClick => 'closeEditPanel(this);return false;'
