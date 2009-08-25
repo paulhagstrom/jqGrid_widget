@@ -1,3 +1,5 @@
+# This is now obsolete, I decided not to use it.
+# TODO: Remove this from the source.
 module PatchApotomoEvents
   # Patch stores only the widget_id and its tree to allow it to be found again when needed
   # Commented out is a different patch that stripped out the source widget's ivars_to_forget.

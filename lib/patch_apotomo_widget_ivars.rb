@@ -1,3 +1,6 @@
+# This is now obsolete, I decided not to use it.
+# TODO: Remove this from the source.
+
 module PatchApotomoWidgetIvars
   # This is now obsolete.  I think.
   # Mix into the widget with include PatchApotomoWidgetIvars

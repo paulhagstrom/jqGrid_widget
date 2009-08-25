@@ -191,7 +191,6 @@ module JqgridWidget::JqgridWidgetHelper
   
   # Prepare the edit panel arising from row clicks
   # The :edit mode is the normal behavior, the :add mode is used to respond to clicking an add button.
-  # TODO: Wherefore opts?
   def wire_jqgrid_rowselect_panel(mode = :edit)
     return '' unless @row_panel.size > 0
     ids = (mode == :edit) ? 'ids' : "'0'"

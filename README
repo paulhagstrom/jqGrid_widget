@@ -1,4 +1,5 @@
-This is the future home of the readme.
+JQGrid widget
+A widget designed for Apotomo using jQuery and the jQGrid plugin
 
 To install:
 
@@ -10,4 +11,53 @@ cd public/images
 ln -s vendor/plugins/jqgrid_widget/public/images/indicator.white.gif
 ln -s vendor/plugins/jqgrid_widget/public/javascripts/jqgrid_widget.js
 ln -s vendor/plugins/jqgrid_widget/public/stylesheets/fancytable.css
+
+I think that's not actually sufficient.  I think you also need to add as submodules:
+Apotomo
+Cells
+jqGrid
+Instructions pending.
+
+Usage:
+For the controller, inherit from JqgridWidgetController, set the layout, and have #index define the widget tree using #jqgrid_widget.  Then render the widget (and its children) into an instance variable to send along to the view.
+
+class MainController < JqgridWidgetController
+	layout 'applayout'
+
+	def index
+		use_widget a_parent_widget = jqgrid_top_widget('resource_name')
+		embed_widget(a_parent_widget, a_child_widget = jq_grid_widget('sub_resource'))
+		
+		@a_parent_widget = render_widget(a_parent_widget.name)
+	end
+end
+
+use_widget is defined by Apotomo, listy_widget is defined in JqgridWidgetController.
+
+For jqgrid_widget, the first and required argument is the "resource" (model name) from which the data is drawn.  Other options include :cell_class (defaults to a class built from the resource name, e.g., ResourcesCell), :prefix (defaults to ''), :jqgrid_id (defaults to prefix + resources + '_list', e.g., 'resources_list'), :widget_id (defaults to prefix + resource, e.g., 'resource'), and :top_widget (defaults to 'no', but should be set to 'yes' for the top parent in a tree).  The :top_widget parameter is used to bound message passing.  And, better to use jqgrid_top_widget so that you need not share in the magical nature of :top_widget = 'yes'.
+
+The widgets themselves live in app/cells, where the cells are defined like ResourcesCell (resources_cell.rb), and the views for the cells are in a folder named resources (these conventions come from Apotomo/Cells).
+
+When defining the widget itself, the default behavior will do a lot, so most of what is inherited from JqgridWidgetCell can be left without changes.  A simple example might be like this:
+
+class CollectionsCell < JqgridWidgetCell
+
+  def _setup
+    super do |col|
+      col.add_column('name', :width => 75, :sortable => true)
+      col.add_column('virtual', :width => 30, :label => 'Virt', :formatter => 'checkbox', :sortable => true)
+    end
+    @caption = 'Collections'
+    @rows_per_page = 20
+    nil
+  end
+
+  def scoped_model
+    Collection.global_collections
+  end
+end
+
+#add_column is defined by JqgridWidgetCell, and helps build the jqGrid.  There are a bunch of options, I'll deal with them later.
+
+#scoped_model is just the resource model by default, but for children that depend on a parent selection, better to use parent.records.contacts.  The list population will be built off of this scope with finds.
 
