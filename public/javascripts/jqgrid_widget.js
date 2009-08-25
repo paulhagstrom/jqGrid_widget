@@ -2,6 +2,8 @@
 
 var jqgw_debug = 0;
 
+// Functions to supplement jQGrid:
+
 // activateTitleBar on a table will make clicking on the caption the same as click on the collapse icon.
 // It also adds a second click handler to the collapse icon in order to expand/collapse the edit panel as well.
 function activateTitleBar(table) {
@@ -28,6 +30,28 @@ function openTable(table) {
 		jQuery(table).closest('.ui-jqgrid-view').find('.ui-jqgrid-titlebar-close').trigger('click');
 	}
 }
+// jQGrid's "loading" UI behavior is hidden away as a private function, so I duplicated
+// the basic essence of its beginReq() function here.  It is used to send the UI for child
+// tables into the "loading" state while the parent loads. The table is expanded when this
+// happens, in order for the "loading..." message to appear in a sensible place.
+// I also ditched the beforeRequest and the check for initial collapsed status.
+function indicateReq(table) {
+  var ts = jQuery(table)[0];
+	//openTable(table);
+	switch(ts.p.loadui) {
+		case "disable":
+			break;
+		case "enable":
+			jQuery("#load_"+ts.p.id).show();
+			break;
+		case "block":
+			jQuery("#lui_"+ts.p.id).show();
+			jQuery("#load_"+ts.p.id).show();
+			break;
+	}
+}
+
+// Dataset caching:
 
 // The following functions implement a pre-cache for JSON requests, which allow for
 // the parent widget to send data updates for itself and all children at once to minimize
@@ -50,26 +74,9 @@ function retrieveJSON(table,purl,pdata) {
 function pushJSON(table,json) {
   pendingJSON[table] = json;
 }
-// jQGrid's "loading" UI behavior is hidden away as a private function, so I duplicated
-// the basic essence of its beginReq() function here.  It is used to send the UI for child
-// tables into the "loading" state while the parent loads. The table is expanded when this
-// happens, in order for the "loading..." message to appear in a sensible place.
-// I also ditched the beforeRequest and the check for initial collapsed status.
-function indicateReq(table) {
-  var ts = jQuery(table)[0];
-	//openTable(table);
-	switch(ts.p.loadui) {
-		case "disable":
-			break;
-		case "enable":
-			jQuery("#load_"+ts.p.id).show();
-			break;
-		case "block":
-			jQuery("#lui_"+ts.p.id).show();
-			jQuery("#load_"+ts.p.id).show();
-			break;
-	}
-}
+
+// JqgridWidget functions:
+
 // This opens an edit panel under the row whose row/cell was clicked on.
 // The openRowPanel function is designed to be a callback for jQGrid's onCellSelect event.
 function openRowPanel(rowid,cellindex,html,target,url,panels) {

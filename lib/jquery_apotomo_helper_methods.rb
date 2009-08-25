@@ -1,5 +1,5 @@
 # Just cherry-picking a couple of things from jRails, in order to avoid reliance on Prototype
-# This is included by JqgridWidgetController via require 'jquery_apotomo_helper_methods'
+# This is included by JqgridWidgetController and JqgridWidgetCell via require 'jquery_apotomo_helper_methods'
 module ActionView
   module Helpers
     module PrototypeHelper

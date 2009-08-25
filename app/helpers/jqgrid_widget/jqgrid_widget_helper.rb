@@ -45,41 +45,34 @@ module JqgridWidget::JqgridWidgetHelper
     options[:pager] ||= {}
     options[:pager_id] ||= @jqgrid_id + '_pager'
     options[:height] ||= 150
-    # options[:enable_panel] ||= false
-    # options[:enable_cell_panel] ||= false
     options[:collapsed] ||= false #(options[:collapsed] != false) instead to make it default to true
-    # options[:url] ||= url_for(address_to_event({:state => '_send_recordset', :escape => false}, :data))
-    # I have to make this not be a data call, because I need it to be able to react to rowClicks.
-    # It would have been more convenient as a data call.  But I don't think data calls will bundle the child responses.
-    # options[:url] ||= url_for(address_to_event({:state => '_send_recordset', :bundle => 'yes', :escape => false}))
     options[:url] ||= url_for(address_to_event({:state => '_send_recordset', :escape => false}))
     options[:caption] ||= @caption || 'Records'
     options[:initial_sort] ||= @columns[0][:index]
     options[:add_button] ||= true
 
-    # col_names, col_model = wire_jqgrid_columns
     empty_table = (@is_top_widget == 'yes') ? "jQuery('##{@jqgrid_id}');" : js_push_json_to_cache(empty_json)
     javascript_tag <<-JS
     #{empty_table}
     jQuery("##{@jqgrid_id}").jqGrid({
       datatype: function(pdata) { retrieveJSON('##{@jqgrid_id}','#{options[:url]}',pdata); },
-      height: #{options[:height]},
-      colModel:[#{wire_jqgrid_columns}],
-      #{wire_jqgrid_pager(options)}
       viewrecords: true,
       scrollrows: true,
+      sortorder: "asc",
+      viewsortable: true,
+      loadui: 'block',
+      //toolbar: [true,'top'],
+      //loadonce: true,
+      height: #{options[:height]},
+      colModel:[#{wire_jqgrid_columns}],
       pager: jQuery('##{options[:pager_id]}'),
       sortname: '#{options[:initial_sort]}',
-      loadui: 'block',
       hiddengrid: #{options[:collapsed] ? 'true' : 'false'},
+      #{wire_jqgrid_pager(options)}
       #{wire_jqgrid_cellselect}
       #{wire_jqgrid_rowbeforeselect}
       #{wire_jqgrid_rowselect}
       #{wire_jqgrid_load_complete}
-      sortorder: "asc",
-      viewsortable: true,
-      //toolbar: [true,'top'],
-      //loadonce: true,
       caption: "#{options[:caption]}"
     }).navGrid('##{options[:pager_id]}', {edit:false,add:false,del:true,search:false,refresh:false})
     #{wire_jqgrid_add_button(options)}
@@ -91,26 +84,14 @@ module JqgridWidget::JqgridWidgetHelper
     JS
   end
   
-  # Prepare the columns model
+  # Return the Javascript columns model (with just the jQGrid options, not the JqgridWidget options)
   # See http://www.secondpersonplural.ca/jqgriddocs/index.htm
-  # This turned out to be a pretty trivial method once everything got put into make_js.
   def wire_jqgrid_columns
-    # Don't emit jqGridWidget options, just jqGrid options
-    (@columns.map {|c| make_js(c.dup.delete_if{|k,v| [:custom, :panel, :panel_under_row].include?(k)})}).join(',')
+    omit_options = [:custom, :panel, :panel_under_row]
+    (@columns.map {|c| make_js(c.dup.delete_if{|k,v| omit_options.include?(k)})}).join(',')
   end
   
-  # Turn Ruby datatypes into emittable Javascript
-  # Cf. array_or_string_to_javascript, is there an official way to do this already built in?
-  # I couldn't get case/when to work here for some reason
-  def make_js(thing)
-    (thing.class == Hash) ? '{' + (thing.map{|k,v| k.to_s + ':' + make_js(v)}).join(',') + '}' :
-      (thing.class == Array ? '[' + (thing.map{|v| make_js(v)}).join(',') + ']' :
-        (thing.class == String ? "'#{thing}'" : thing.to_s
-        )
-      )
-  end
-  
-  # Prepare the pager options
+  # Return the pager options
   def wire_jqgrid_pager(options)
     if options[:pager].keys.size > 0
       return <<-JS
@@ -149,8 +130,6 @@ module JqgridWidget::JqgridWidgetHelper
   		if (ids.length > 0) {
 		    var row = jQuery('##{@jqgrid_id}').getRowData(ids[0]);
   		  if (ids.length == 1 && #{(@single_record_caption ? 'true' : 'false')}) {
-    	    //console.dir(ids);
-  		    //console.dir(row);
       		hideTable('##{@jqgrid_id}');
   		    jQuery('##{@jqgrid_id}').setCaption(#{@single_record_caption});
   		    jQuery('##{@jqgrid_id}').closest('.ui-jqgrid-view').find('.ui-jqgrid-titlebar').addClass('ui-state-highlight');
@@ -324,5 +303,18 @@ module JqgridWidget::JqgridWidgetHelper
   def cancel_button(text = 'Cancel')
     submit_tag "Cancel", :onClick => 'closeEditPanel(this);return false;'
   end
+
+  # Utility function
   
+  # Turn Ruby datatypes into emittable Javascript
+  # Cf. array_or_string_to_javascript, is there an official way to do this already built in?
+  # I couldn't get case/when to work here for some reason
+  def make_js(thing)
+    (thing.class == Hash) ? '{' + (thing.map{|k,v| k.to_s + ':' + make_js(v)}).join(',') + '}' :
+      (thing.class == Array ? '[' + (thing.map{|v| make_js(v)}).join(',') + ']' :
+        (thing.class == String ? "'#{thing}'" : thing.to_s
+        )
+      )
+  end
+
 end

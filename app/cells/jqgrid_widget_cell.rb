@@ -1,109 +1,24 @@
 class JqgridWidgetCell < Apotomo::StatefulWidget
+  # JqgridWidgetCell is the heart of the jQGrid widget, an extension of Apatomo's StatefulWidget
+  # TODO: Some documentation here.
+  
+  # In order to be able to do urlencoding, I bring in the Javascript helpers here.
+  # TODO: I forget where I use this.  Is it really urlencoding?  Do I really still use it?  Check.
   include ActionView::Helpers::JavaScriptHelper 
-  helper JqgridWidget::JqgridWidgetHelper
+  # Bring in a couple of things from jRails.  Probably it would be better to simply attach jRails in full,
+  # but for the moment there are only a couple of things that are needed for this to operate in jQuery alone.
   require 'jquery_apotomo_helper_methods'
-  # include PatchApotomoWidgetIvars
-
-  # Current state: There is now an advisor panel.  It has some quirks, and I don't think it can save yet.
-  # Certinaly it doesn't show the kinds of information one might want, like counts of the advisor assignments for different advisors.
-  # TODO: Clicking on the panel on employee_section only brings up an Add panel (not Edit)
-  # TODO: Lots of stuff wrt the filters is working.  One thing that seems not to is that the selection is preserved when the filter is
-  # TODO: ...chosen, and so if the selected record is no longer in the list, it becomes sad and throws an innerHTML error.
-  # TODO: Meanwhile the selection is not preserved when the list is sorted.
-  # TODO: This could use some cleanup again.  I've now phased out all non-bundled data, which means I don't need to refer to it anymore.
-  # TODO: Figure out some more elegant way to handle record associations.  Include everything by default?
-  # TODO: Allow deleting of records.  The icon is there and perhaps all I need to do is set the jqgrid url.
-  # TODO: Bring live search back.
-  # TODO: The person add button doesn't do anything.
   
   helper :all
+  # Make some of the methods defined here available to the view as well
   helper_method :js_reload_grid, :js_select_id, :js_push_json_to_cache, :empty_json
+  # Make the JqgridWidgetHelper methods available to the view; these appear not to be noticed by helper :all
+  helper JqgridWidget::JqgridWidgetHelper
   
   attr_reader :record
   attr_reader :jqgrid_id
-    
-  # TODO: I'm not certain I'm using this correctly. In particular, I'm not sure about automatic advancement of
-  # TODO: states.  I think the states may auto-advance to the first in the list if there is no explicit jump,
-  # TODO: and that may not be what I'm after.  Maybe I should introduce a "resting state"?
-  # For the moment I'll leave it open like this, but I might want to pare it down.  (Though, why?)
-  def transitions_all
-    [:_json_for_jqgrid, :_edit_panel, :_edit_panel_submit,
-      :_reflect_child_update, :_send_recordset, :_clear_recordset, :_set_filter,
-      :_filter_display, :_filter_counts, :_setup]
-  end
   
-  def transition_map
-    {
-      :_setup => ([:_json_for_jqgrid] + transitions_all).uniq,
-      :_send_recordset => ([:_send_recordset] + transitions_all).uniq,
-      :_clear_recordset => ([:_clear_recordset] + transitions_all).uniq,
-      :_json_for_jqgrid => ([:_json_for_jqgrid] + transitions_all).uniq,
-      :_edit_panel => ([:_edit_panel] + transitions_all).uniq,
-      :_edit_panel_submit => ([:_edit_panel] + transitions_all).uniq,
-      :_reflect_child_update => ([:_reflect_child_update] + transitions_all).uniq,
-      :_set_filter => ([:_set_filter] + transitions_all).uniq,
-      :_filter_display => ([:_filter_display] + transitions_all).uniq,
-      :_filter_counts => ([:_filter_counts] + transitions_all).uniq,
-    }
-  end
-  
-  def scoped_model
-    # just resource_model for the top widget; for children, use something like parent.records.contacts
-    # or, if you have a named scope, you can put that here.
-    resource_model
-  end
-
-  # If this widget is supposed to immediately select the first item in a list, set this to true
-  # (This is useful for lists that are not that likely to have multiple entries, but for which there are children)
-  # This should be false if nothing should be selected automatically, 'unique' if only a unique record should be
-  # selected, 'exact' if an exact match to the search string should be selected, or just anything non-false
-  # if the first available record should be selected.
-  def select_on_load
-    false
-  end
-  
-  # descendents_to_reload will reload all descendants if there is even a chance that a record could be selected.
-  def descendants_to_reload
-    d = []
-    if children_to_render.size > 0
-      children_to_render.each do |c|
-        if c.select_on_load
-          d += c.descendants_to_reload
-        end
-        d += [c.jqgrid_dom_id]
-      end
-    end
-    return d
-  end
-  
-  def empty_json
-    '{"rows": [], "records": 0, "page": 0, "total": 0}'
-  end
-  
-  def js_reload_jqgrid(jqgrid_id = @jqgrid_id)
-    return <<-JS
-    jQuery('##{jqgrid_id}').trigger('reloadGrid');
-    JS
-  end
-  
-  def js_select_id(id = nil)
-    if id
-      return <<-JS
-      jQuery('##{@jqgrid_id}').setSelection('#{id}', false);
-      JS
-    else
-      return <<-JS
-      jQuery('##{@jqgrid_id}').resetSelection();
-      JS
-    end
-  end
-  
-  def js_push_json_to_cache(raw_json_data)
-    json_data = escape_javascript(raw_json_data)
-    return <<-JS
-    pushJSON('##{@jqgrid_id}', "#{json_data}");
-    JS
-  end
+  # SETUP
   
   # Assume all documentation-like comments may be out of date.
   # The _setup state is the start state. This will render the partial app/cells/{cell}/_setup.html.erb.
@@ -137,7 +52,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # end
   # TODO: Perhaps later I may want to be able to make the default filter not be the first one?
   def _setup
-    @caption = 'Records'
+    @caption = params(:resource).pluralize.humanize #'Records'
     @collapse_if_empty = false
     @single_record_caption = false
     # @single_record_caption is a small Javascript snippet, can make use of 'row' variable.
@@ -167,6 +82,190 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     yield self if block_given?
     
     nil
+  end
+ 
+  # To load a recordset for the table in this widget, a find call is passed to the scoped_model.
+  # If this is a top widget, it is appropriate to leave it as resource_model.  If this is a
+  # child widget, this can be something like parent.records.contacts (or, you have defined a named scope,
+  # that could also go here).  You can rely on records being an attribute of parent.
+  def scoped_model
+    resource_model
+  end
+
+  # If this widget is supposed to immediately select the first item in a list, set this to true
+  # (This is useful for lists that are not that likely to have multiple entries, but for which there are children)
+  # This should be false if nothing should be selected automatically, 'unique' if only a unique record should be
+  # selected, 'exact' if an exact match to the search string should be selected, or just anything non-false
+  # if the first available record should be selected.
+  def select_on_load
+    false
+  end
+  
+  # STATES
+  
+  # For the moment, I'm just basically bypassing Apotomo's state transitions by allowing any state
+  # to transition to any other state.  transition_all should include all of the states, transition_map is
+  # defined off of that (and transition_map is what Apotomo itself consults).
+  # TODO: Once this is all better defined, I should tighten this up probably, though it works as-is.
+  def transitions_all
+    [:_json_for_jqgrid, :_edit_panel, :_edit_panel_submit,
+      :_reflect_child_update, :_send_recordset, :_clear_recordset, :_set_filter,
+      :_filter_display, :_filter_counts, :_setup]
+  end
+  
+  def transition_map
+    {
+      :_setup => ([:_json_for_jqgrid] + transitions_all).uniq,
+      :_send_recordset => ([:_send_recordset] + transitions_all).uniq,
+      :_clear_recordset => ([:_clear_recordset] + transitions_all).uniq,
+      :_json_for_jqgrid => ([:_json_for_jqgrid] + transitions_all).uniq,
+      :_edit_panel => ([:_edit_panel] + transitions_all).uniq,
+      :_edit_panel_submit => ([:_edit_panel] + transitions_all).uniq,
+      :_reflect_child_update => ([:_reflect_child_update] + transitions_all).uniq,
+      :_set_filter => ([:_set_filter] + transitions_all).uniq,
+      :_filter_display => ([:_filter_display] + transitions_all).uniq,
+      :_filter_counts => ([:_filter_counts] + transitions_all).uniq,
+    }
+  end
+
+  # State _clear_recordset
+  # This is triggered by a parent's :recordUnselected event.
+  # It pushes an empty recordset into the JSON cache, then reloads the grid
+  def _clear_recordset
+    trigger(:recordUnselected) # Keep passing the word down the tree
+    return '>>' + js_push_json_to_cache(empty_json) + js_reload_jqgrid
+  end
+  
+  # State _reflect_child_update
+  # This is triggered by a child's :recordUpdated event.
+  # This is the handler for :recordUpdated, which a child sends to a parent to request a reload, since
+  # sometimes the child's data might be reflected in the parent table.  It just calls _send_recordset, but
+  # without the superfluous downward message-passing, and with a preservation of the selection.
+  # I'd use jump_to_state, but I'd have to set a transient instance variable to pass along the parameter.
+  def _reflect_child_update(inject_js = '')
+    _send_recordset(false, inject_js)
+  end
+  
+  # This is a state that returns the JSON data for the recordset.
+  # It is no longer suitable for serving as a jqGrid data source because it requires the records to
+  # have been loaded first (as well as the pagination parameters)
+  def _json_for_jqgrid(records)
+    # @page = (param(:page) || @page || 1).to_i
+    # @rows_per_page = (param(:rows) || @rows_per_page || 20).to_i
+    # @sidx = (param(:sidx) || @sidx || 'name')
+    # @sord = (param(:sord) || @sord || 'asc')
+    # @search = (param(:_search) || @search || '')
+    # @livesearch = (param(:_livesearch) || @livesearch || '')
+    # records = load_records
+    json = {
+      :page => @page,
+      :total => @total_pages, 
+      :records => @total_records,
+      :rows => grid_rows(records)
+    }.to_json
+  end
+
+  # State _edit_panel
+  # This is triggered by a widget firing an :openEditPanel event
+  def _edit_panel
+    @record = scoped_model.find_by_id(param(:id)) || scoped_model.new
+    if param(:panel) == 'row'
+      panel = @row_panel
+    else
+      panel = @columns[param(:panel).to_i][:panel]
+    end
+    render :view => panel
+  end
+
+  # State _edit_panel_submit
+  # This is the target of the edit panel's form submission.
+  def _edit_panel_submit
+    @record.update_attributes(param(param(:resource).to_sym))
+    @record.save
+    @record.reload # Be sure we get the id if this was a new record
+    trigger(:recordSelected)
+    # TODO: add some kind of feedback
+    inject_js = <<-JS
+      closeEditPanel('##{@jqgrid_id}');
+    JS
+    _reflect_child_update(inject_js) # reload as if we got an updated message from a hypothetical child
+  end
+  
+  # TODO: The controller code refers to a _edit_panel_cancel state, but I see no trace of it here.
+  
+  # State _set_filter
+  # This is triggered by clicking on a filter
+  # This receives changes in the filter and deals with them.
+  # Relies on strategic naming of the filter id to have the filter key first, followed by __.
+  def _set_filter
+    if param(:catid)
+      catsplit = param(:catid).split('__')
+      filter = catsplit[0]
+      category_not_clicked = false
+    else
+      filter = param(:filter)
+      category_not_clicked = true
+    end
+    new_filter = @filters.assoc(filter) ? filter : @filters.first[0]
+    filter_unchanged = (@filter == new_filter)
+    if param(:init)
+      filter_unchanged = false
+    end
+    @filter = new_filter
+    @subfilter = param(:subfilter) ? param(:subfilter) : {}
+    redraw_filter = filter_unchanged ? '' : <<-JS
+      jQuery('##{@jqgrid_id}_filter_header').find('.ui-state-highlight').removeClass('ui-state-highlight').addClass('ui-state-default');
+      jQuery('##{@filter}__#{@jqgrid_id}_filter_category').addClass('ui-state-highlight');
+      jQuery('.jqgw-filter-open').removeClass('jqgw-filter-open').slideUp('normal');
+      jQuery('##{@jqgrid_id}_#{@filter}_filter_form').addClass('jqgw-filter-open').slideDown('normal');
+    JS
+    clear_checkboxes = (filter_unchanged && category_not_clicked) ? '' : <<-JS
+      jQuery('##{@jqgrid_id}_#{@filter}_filter_form').find('input[type=checkbox]').attr('checked',false);
+    JS
+    return(_send_recordset(false, redraw_filter + clear_checkboxes))
+  end
+
+  # State _filter_display
+  # This is triggered when the page is initially drawn, to fill in the filter div.
+  # It is used by wire_filters in jqgrid_widget_helper
+  def _filter_display
+    render :view => '_filters'
+  end
+
+  # State _filter_counts (returns Javascript, called with jQuery.getScript)
+  # This is triggered after the filters have been initially drawn
+  # It is used by wire_filters in jqgrid_widget_helper
+  # This will count the number of hits under each filter and then fill in the filter count span with the result.
+  # I separated this out because I wanted it to be asynchronous and not slow down other activities.
+  def _filter_counts
+    js_emit = ''
+    @filters.each do |filter|
+      filter[1][:subfilters].to_a.each do |sf|
+        sf[1][:options].to_a.each do |sfop|
+          f, s, i, c, total_records = filter_prepare(filter[0], {sf[0] => {sfop[0] => '1'}})
+          js_emit += "jQuery('##{@jqgrid_id}_#{filter[0]}_#{sf[0]}_#{sfop[0]}_count').html(#{total_records});"
+        end
+      end
+    end
+    js_emit
+  end
+
+  # SUPPORTING METHODS
+  
+  # descendents_to_reload creates a list of all descendants that have the select_on_load property set and so
+  # might wind up having a selection automatically set.  The _setup state puts this in an instance variable
+  # that the views can then use.
+  def descendants_to_reload
+    d = []
+    if children_to_render.size > 0
+      children_to_render.each do |c|
+        if c.select_on_load
+          d += c.descendants_to_reload
+        end
+        d += [c.jqgrid_dom_id]
+      end
+    end
+    return d
   end
   
   # eager_load is a helper for an otherwise kind of esoteric-looking modification you can make
@@ -211,11 +310,17 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     options[:panel_under_row] = false unless options.has_key?(:panel_under_row)
     @columns << options
   end
-    
-  # This is the state called as the jQGrid data source.  The data of this widget and its children are bundled together
-  # in a series of Javascript commands that put the data in the cache and then tell the jqgrid to reload.
-  # The way this works is by triggering events that the children are listening for, each of whom will return
-  # their own Javascript.
+  
+  # RECORDSET PROCESSING
+  
+  # State _send_recordset (returns Javascript, called with jQuery.getScript)
+  # This is called by the jQGrid data source function (retrieveJSON, defined in jqgrid_widget.js) if there
+  # is no data already in the cache.  It should result in Javascript code to push the recordset into the cache
+  # and then reload the grid (to pull it back out again).
+  # The way this works is a little bit magical, it relies on the bundling done by Apotomo.
+  # It triggers events that the children are listening for, and the children will emit their own Javascript.
+  # Apotomo will then bundle all of this together before sending it back to the browser.
+  #
   # This is also the handler for :recordSelected events sent by a parent to its children.
   # The children_unaware parameter is set to false if the child itself has triggered this (used in _reflect_child_update).
   # If there was a record selected before, try to maintain that selection. However if the record is no longer there,
@@ -295,40 +400,6 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     end
   end
   
-  # This is the handler for :recordUnselected events sent by parents to children, it stuffs an empty recordset into
-  # the cache and then reloads.
-  def _clear_recordset
-    trigger(:recordUnselected) # Keep passing the word down the tree
-    return '>>' + js_push_json_to_cache(empty_json) + js_reload_jqgrid
-  end
-  
-  # This is the handler for :recordUpdated, which a child sends to a parent to request a reload, since
-  # sometimes the child's data might be reflected in the parent table.  It just calls _send_recordset, but
-  # without the superfluous downward message-passing, and with a preservation of the selection.
-  # I'd use jump_to_state, but I'd have to set a transient instance variable to pass along the parameter.
-  def _reflect_child_update(inject_js = '')
-    _send_recordset(false, inject_js)
-  end
-  
-  # This is a state that returns the JSON data for the recordset.
-  # It is no longer suitable for serving as a jqGrid data source because it requires the records to
-  # have been loaded first (as well as the pagination parameters)
-  def _json_for_jqgrid(records)
-    # @page = (param(:page) || @page || 1).to_i
-    # @rows_per_page = (param(:rows) || @rows_per_page || 20).to_i
-    # @sidx = (param(:sidx) || @sidx || 'name')
-    # @sord = (param(:sord) || @sord || 'asc')
-    # @search = (param(:_search) || @search || '')
-    # @livesearch = (param(:_livesearch) || @livesearch || '')
-    # records = load_records
-    json = {
-      :page => @page,
-      :total => @total_pages, 
-      :records => @total_records,
-      :rows => grid_rows(records)
-    }.to_json
-  end
-  
   # Turn @records into something appropriate for the _json_for_jqgrid method
   def grid_rows(records)
     records.collect do |r|
@@ -360,7 +431,6 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   end
   
   # This is the actual method that queries the database.
-  # TODO: This is not working, it seems to be returning too many results.
   def load_records
     get_paging_parameters
     @filter, @subfilter, find_include, find_conditions, @total_records = filter_prepare
@@ -417,80 +487,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     return[verified_filter, subfilter, find_include, find_conditions, total_records]
   end
   
-  # This is the state that is invoked when an edit panel is to be displayed.
-  def _edit_panel
-    @record = scoped_model.find_by_id(param(:id)) || scoped_model.new
-    if param(:panel) == 'row'
-      panel = @row_panel
-    else
-      panel = @columns[param(:panel).to_i][:panel]
-    end
-    render :view => panel
-    # state_view! panel
-  end
+  # Constants and utilities
 
-  def _edit_panel_submit
-    @record.update_attributes(param(param(:resource).to_sym))
-    @record.save
-    @record.reload # Be sure we get the id if this was a new record
-    trigger(:recordSelected)
-    # TODO: add some kind of feedback
-    inject_js = <<-JS
-      closeEditPanel('##{@jqgrid_id}');
-    JS
-    _reflect_child_update(inject_js) # reload as if we got an updated message from a hypothetical child
-  end
-  
-  # This receives changes in the filter and deals with them.
-  # Relies on strategic naming of the filter id to have the filter key first, followed by __.
-  def _set_filter
-    if param(:catid)
-      catsplit = param(:catid).split('__')
-      filter = catsplit[0]
-      category_not_clicked = false
-    else
-      filter = param(:filter)
-      category_not_clicked = true
-    end
-    new_filter = @filters.assoc(filter) ? filter : @filters.first[0]
-    filter_unchanged = (@filter == new_filter)
-    if param(:init)
-      filter_unchanged = false
-    end
-    @filter = new_filter
-    @subfilter = param(:subfilter) ? param(:subfilter) : {}
-    redraw_filter = filter_unchanged ? '' : <<-JS
-      jQuery('##{@jqgrid_id}_filter_header').find('.ui-state-highlight').removeClass('ui-state-highlight').addClass('ui-state-default');
-      jQuery('##{@filter}__#{@jqgrid_id}_filter_category').addClass('ui-state-highlight');
-      jQuery('.jqgw-filter-open').removeClass('jqgw-filter-open').slideUp('normal');
-      jQuery('##{@jqgrid_id}_#{@filter}_filter_form').addClass('jqgw-filter-open').slideDown('normal');
-    JS
-    clear_checkboxes = (filter_unchanged && category_not_clicked) ? '' : <<-JS
-      jQuery('##{@jqgrid_id}_#{@filter}_filter_form').find('input[type=checkbox]').attr('checked',false);
-    JS
-    return(_send_recordset(false, redraw_filter + clear_checkboxes))
-  end
-
-  # This redraws the whole filter div
-  def _filter_display
-    render :view => '_filters'
-    # state_view! '_filters'
-  end
-  
-  # Return counts for all of the filter options
-  def _filter_counts
-    js_emit = ''
-    @filters.each do |filter|
-      filter[1][:subfilters].to_a.each do |sf|
-        sf[1][:options].to_a.each do |sfop|
-          f, s, i, c, total_records = filter_prepare(filter[0], {sf[0] => {sfop[0] => '1'}})
-          js_emit += "jQuery('##{@jqgrid_id}_#{filter[0]}_#{sf[0]}_#{sfop[0]}_count').html(#{total_records});"
-        end
-      end
-    end
-    js_emit
-  end
-  
   def resource_model
     Object.const_get param(:resource).classify
   end
@@ -503,6 +501,42 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # No frame generated by the widget, assuming that relevant divs are generated elsewhere
   def frame_content(content)
     content
+  end
+
+  # The following functions define the Javascript calls that the widget generates.
+  # If need be these can be redefined.
+  
+  # empty_json is a JSON structure for an empty dataset, suitable for pushing into the cache.
+  def empty_json
+    '{"rows": [], "records": 0, "page": 0, "total": 0}'
+  end
+  
+  # Javascript to explicitly trigger a grid reload (which will preferentially draw from the cache)
+  def js_reload_jqgrid(jqgrid_id = @jqgrid_id)
+    return <<-JS
+    jQuery('##{jqgrid_id}').trigger('reloadGrid');
+    JS
+  end
+  
+  # Javascript to set (or reset if no id is passed in) the selection in the jqgrid.
+  def js_select_id(id = nil)
+    if id
+      return <<-JS
+      jQuery('##{@jqgrid_id}').setSelection('#{id}', false);
+      JS
+    else
+      return <<-JS
+      jQuery('##{@jqgrid_id}').resetSelection();
+      JS
+    end
+  end
+  
+  # Javascript to push a JSON dataset into the cache to be used on the next reload.
+  def js_push_json_to_cache(raw_json_data)
+    json_data = escape_javascript(raw_json_data)
+    return <<-JS
+    pushJSON('##{@jqgrid_id}', "#{json_data}");
+    JS
   end
 
 end

@@ -70,6 +70,7 @@ class JqgridWidgetController < ApplicationController
     x = cell_class.new(controller, widget_id, :_setup, :resource => resource, :jqgrid_id => jqgrid_id,
       :prefix => pfx, :top_widget => top_widget)
     # Set up the event watchers for the edit panel
+    # TODO: What's up with _edit_panel_cancel? There's no such state in jqgrid_widget_cell.
     x.watch(:openEditPanel, x.name, :_edit_panel, x.name)
     x.watch(:editPanelCancel, x.name, :_edit_panel_cancel, x.name)
     # Return the widget
@@ -86,7 +87,8 @@ class JqgridWidgetController < ApplicationController
   # In most cases, it's simpler to use jqg_child_widget.
   def embed_widget(parent_cell, child_cell)
     parent_cell << child_cell
-    # watch for parental updates and update the child when they happen
+    # Parents watch themselves for record selects and unselects, and send children into appropriate states.
+    # Parents also watch children for record updates, and update themselves if one occurs.
     # TODO: I don't need to watch for both events for things that can never receive a recordAutoChanged.  Is it worth checking?
     parent_cell.watch(:recordSelected, child_cell.name, :_send_recordset, parent_cell.name)
     parent_cell.watch(:recordUnselected, child_cell.name, :_clear_recordset, parent_cell.name)
