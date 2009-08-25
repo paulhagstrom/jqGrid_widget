@@ -87,8 +87,8 @@ function openRowPanel(rowid,cellindex,html,target,url,panels) {
 		// might be better to use .ui-state-focus, but it wasn't very visible
 		if (cellindex != 'row') {
 			var c = r.find('td:eq(' + cellindex + ')');
-			t.find('.fancytable_cell_focus').removeClass('fancytable_cell_focus');
-			c.addClass('fancytable_cell_focus');
+			t.find('.jqgw_cell_focus').removeClass('jqgw_cell_focus');
+			c.addClass('jqgw_cell_focus');
 		}
 		// if there are any panels open already, tell them to close
 		//t.find('.open_edit_panel').removeClass('open_edit_panel').addClass('closing_edit_panel');

@@ -1,9 +1,10 @@
-/* For the fancytable. */
+/* CSS additions used by jqgrid_widget */
+/* Some of this may well be redundant with things already provided somewhere in jQueryUI */
 
-.fancytable_edit_panel {
+.jqgw_edit_panel {
 	background-color: #CCCCFF;
 }
-.fancytable_cell_focus {
+.jqgw_cell_focus {
 	background-color: #CCCCFF;
 }
 
@@ -19,11 +20,11 @@
 }
 
 /* Make the widget overlay sit on top (to dim it out while loading is happening) */
-
+/* Perhaps this is already do-able with jqgrid as-is, but I didn't see how, so I did this instead. */
 .ui-widget-overlay {
 	z-index:1;
 }
 
-/* replace loading */
+/* replace loading indicator provided by jqgrid */
 .ui-jqgrid .loading {position: absolute; top: 0px;left: 45%;width: auto;z-index:101;padding: 0px; margin: 2px;text-align: center;font-weight: bold;display: none;border-width: 0px !important;}
 /* end loading div */

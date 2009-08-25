@@ -2,6 +2,7 @@ module JqueryApotomoControllerMethods
 
   # I'm overriding the apotomo function below (from controller_methods)
   # This is a) in order to use jQuery without even having Prototype loaded, b) to allow the Javascript emission magic with >>
+  # TODO: JavascriptSource might be able to take away some of the magic here, I need to explore that a bit.
   def render_page_update_for(processed_handlers)
     js_emit = ''
     js_tail_emit = ''

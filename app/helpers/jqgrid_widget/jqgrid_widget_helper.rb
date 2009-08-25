@@ -1,11 +1,25 @@
 module JqgridWidget::JqgridWidgetHelper
-    
-  # This just inserts an empty table and div into the html.
+  # JqgridWidgetHelper defines a few things to use in the views to get the jqgrid_widgets in there.
+  # Minimally, you need to call html_table_to_wire in the place where you want the jqgrid to be,
+  # and then call wire_jqgrid to insert the Javascript that will connect the jqgrid to it.
+  # Those are the main two methods here for use from the outside, but there are a lot of methods
+  # here that support the wire_ methods.  All of the jQGrid-specific Javascript should be in here, or
+  # else in the jqgrid_widget.js file in public/javascripts.
+  #
+  # To use this, put in your cell view something like:
+  # <%= html_table_to_wire %>
+  # <%= wire_jqgrid %>
+  #
+  # You can also add filters, with html_filters and wire_filters, and a live search with html_live_search_to_wire.
+  # TODO: Document this better.
+  #
+  # html_table_to_wire inserts an empty table and div into the html, where the grid and pager will go.
   # A subsequent call to wire_jqgrid will fill it in and start it up.
-  def html_table_to_wire(table = @jqgrid_id)
+  # Relies on having @jqgrid_id set.
+  def html_table_to_wire
     <<-HTML
-		<table id="#{table}" class="scroll" cellpadding="0" cellspacing="0"></table>
-		<div id="#{table}_pager" class="scroll" style="text-align:center;"></div>
+		<table id="#{@jqgrid_id}" class="scroll" cellpadding="0" cellspacing="0"></table>
+		<div id="#{jqgrid_id}_pager" class="scroll" style="text-align:center;"></div>
 		HTML
   end
 

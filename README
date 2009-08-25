@@ -10,7 +10,7 @@ get submodule update
 cd public/images
 ln -s vendor/plugins/jqgrid_widget/public/images/indicator.white.gif
 ln -s vendor/plugins/jqgrid_widget/public/javascripts/jqgrid_widget.js
-ln -s vendor/plugins/jqgrid_widget/public/stylesheets/fancytable.css
+ln -s vendor/plugins/jqgrid_widget/public/stylesheets/jqgrid_widget.css
 
 I think that's not actually sufficient.  I think you also need to add as submodules:
 Apotomo
