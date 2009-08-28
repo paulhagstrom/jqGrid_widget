@@ -1,4 +1,6 @@
 class JqgridWidgetController < ApplicationController
+  unloadable
+  
   # JqgridWidgetController takes Apotomo::Controller methods and applies a couple of
   # patches, and adds two shortcuts for standardizing/simplifying the addition of
   # jqgrid_widgets to the widget tree with proper communication channels open between them.

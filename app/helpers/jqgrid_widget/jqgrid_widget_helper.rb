@@ -60,7 +60,7 @@ module JqgridWidget::JqgridWidgetHelper
       scrollrows: true,
       sortorder: "asc",
       viewsortable: true,
-      loadui: 'block',
+      loadui: 'disable',
       //toolbar: [true,'top'],
       //loadonce: true,
       height: #{options[:height]},
