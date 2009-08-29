@@ -18,8 +18,9 @@ class JqgridWidgetController < ApplicationController
   # The index method here is intended to be called via 'super' from the subclass.
   # This sets a global event handler on row clicks to call the #handle_select method defined later
   # in this file.
+  # I'm trying to get rid of this global method.  Please work.
   def index
-    respond_to_event :rowClick, :with => :handle_select  
+    # respond_to_event :rowClick, :with => :handle_select  
   end
   
   protected
@@ -71,8 +72,10 @@ class JqgridWidgetController < ApplicationController
     # Create the widget
     x = cell_class.new(controller, widget_id, :_setup, :resource => resource, :jqgrid_id => jqgrid_id,
       :prefix => pfx, :top_widget => top_widget)
-    # Set up the event watchers for the cells
+    # Set up the event watcher for the cells
     x.watch(:cellClick, x.name, :_cell_click, x.name)
+    # Set up the event watcher for the rows
+    x.watch(:rowClick, x.name, :_row_click, x.name)
     # Return the widget
     return x
   end
@@ -90,11 +93,14 @@ class JqgridWidgetController < ApplicationController
     # Parents watch themselves for record selects and unselects, and send children into appropriate states.
     # Parents also watch children for record updates, and update themselves if one occurs.
     # TODO: I don't need to watch for both events for things that can never receive a recordAutoChanged.  Is it worth checking?
-    parent_cell.watch(:recordSelected, child_cell.name, :_send_recordset, parent_cell.name)
-    parent_cell.watch(:recordUnselected, child_cell.name, :_clear_recordset, parent_cell.name)
-    parent_cell.watch(:recordUpdated, parent_cell.name, :_reflect_child_update, child_cell.name)
+    # parent_cell.watch(:recordSelected, child_cell.name, :_send_recordset, parent_cell.name)
+    # parent_cell.watch(:recordUnselected, child_cell.name, :_clear_recordset, parent_cell.name)
+    parent_cell.watch(:recordSelected, child_cell.name, :_parent_selection, parent_cell.name)
+    parent_cell.watch(:recordUnselected, child_cell.name, :_parent_unselection, parent_cell.name)
+    parent_cell.watch(:recordUpdated, parent_cell.name, :_child_updated, child_cell.name)
+    parent_cell.watch(:recordChosen, parent_cell.name, :_child_choice, child_cell.name)
   end
-  
+    
   # A shortcut for embed_widget(parent, child = jqgrid_widget('resource', opts...))
   # Use like jqgrid_widget, except insert the parent widget as the first argument
   # Returns the child widget
@@ -106,9 +112,9 @@ class JqgridWidgetController < ApplicationController
   # When a row is clicked, jqgrid is set to inquire here for some Javascripts to execute.
   # This calls #select_record on the source widget, which will load its @record and announce :recordChanged.
   # Its children will be looking for that, and will fire as needed.
-  def handle_select(event)
-    event.source.select_record(params[:id])
-    ''
-  end
+  # def handle_select(event)
+  #   event.source.select_record(params[:id])
+  #   ''
+  # end
       
 end

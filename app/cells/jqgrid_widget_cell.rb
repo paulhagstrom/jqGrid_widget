@@ -95,6 +95,13 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     resource_model
   end
 
+  # If this is child selector widget, put the field from which the ID is drawn here.
+  # E.g., parent.record.thingie_id.to_i.  If this returns nil, it is presumed to be a subgrid-type child.
+  # Note: the .to_i is important, nil means this is not a child selector, 0 means that no id is selected.
+  def selector_for
+    nil
+  end
+  
   # If this widget is supposed to immediately select the first item in a list, set this to true
   # (This is useful for lists that are not that likely to have multiple entries, but for which there are children)
   # This should be false if nothing should be selected automatically, 'unique' if only a unique record should be
@@ -104,6 +111,25 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     false
   end
   
+  # UI for chosen and not chosen, can be overridden.
+  def chosen_icon
+    '<span class="ui-icon ui-icon-check" />'
+  end
+
+  def not_chosen_icon
+    '<span class="ui-icon ui-icon-circle-arrow-w" />'
+  end
+  
+  # This is the name of the choice mark column, can be overridden if needed.
+  def choice_mark_column_name
+    'choice_mark'
+  end
+
+  # UI for the chosen column header, can be overridden
+  def choice_mark_column_icon
+    '<span class="ui-icon ui-icon-link" />'
+  end
+  
   # STATES
   
   # For the moment, I'm just basically bypassing Apotomo's state transitions by allowing any state
@@ -111,63 +137,113 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # defined off of that (and transition_map is what Apotomo itself consults).
   # TODO: Once this is all better defined, I should tighten this up probably, though it works as-is.
   def transitions_all
-    [:_json_for_jqgrid, :_cell_click, :_edit_panel_submit,
-      :_reflect_child_update, :_send_recordset, :_clear_recordset, :_set_filter,
-      :_filter_display, :_filter_counts, :_setup]
+    [:_cell_click, :_edit_panel_submit, :_row_click, :_child_choice,
+      :_child_updated, :_send_recordset, :_clear_recordset, :_set_filter,
+      :_filter_display, :_filter_counts, :_setup, :_parent_selection, :_parent_unselection]
   end
   
   def transition_map
     {
-      :_setup => ([:_json_for_jqgrid] + transitions_all).uniq,
+      :_setup => ([:_setup] + transitions_all).uniq,
       :_send_recordset => ([:_send_recordset] + transitions_all).uniq,
       :_clear_recordset => ([:_clear_recordset] + transitions_all).uniq,
-      :_json_for_jqgrid => ([:_json_for_jqgrid] + transitions_all).uniq,
       :_cell_click => ([:_cell_click] + transitions_all).uniq,
+      :_row_click => ([:_row_click] + transitions_all).uniq,
       :_edit_panel_submit => ([:_edit_panel] + transitions_all).uniq,
-      :_reflect_child_update => ([:_reflect_child_update] + transitions_all).uniq,
+      :_child_updated => ([:_child_updated] + transitions_all).uniq,
       :_set_filter => ([:_set_filter] + transitions_all).uniq,
       :_filter_display => ([:_filter_display] + transitions_all).uniq,
       :_filter_counts => ([:_filter_counts] + transitions_all).uniq,
+      :_parent_selection => ([:_parent_selection] + transitions_all).uniq,
+      :_parent_unselection => ([:_parent_unselection] + transitions_all).uniq,
+      :_child_choice => ([:_child_choice] + transitions_all).uniq,
     }
   end
+  
+  # Internal communications
+  
+  # State _row_click
+  # This is triggered by a widget firing an :rowClick event.
+  # The row click is intended to handle record selection in a list, only.
+  # For actions that occur when a row is clicked on, refer to the :cellClick handler, which also fires.
+  def _row_click
+    select_record(param(:id))
+    # @record = scoped_model.find_by_id(param(:id)) || scoped_model.new
+  end
+  
+  # When a row is clicked, the controller's row selection handler gets the notification and sends it here.
+  # This announces to the children that a record was selected, much as _send_recordsets does.
+  def select_record(id)
+    unless @record && @record.id == id #only announce if there was a change.
+      if @record = resource_model.find_by_id(id)
+        trigger(:recordSelected)
+        return '>>' + js_select_id(id)
+      else
+        @record = resource_model.new
+        trigger(:recordUnselected)
+        return ''
+      end
+    end
+  end
+  
+  # Family communications
+  
+  # The parent widget has posted a record selected event.
+  # If this is a subgrid-type child, then send the new recordset based on the selection.
+  # If this is a selector-type child, then set the selection to the linked field.
+  # TODO: Note, this might go badly for widgets with paginators, since it does not at present jump to the right page.
+  def _parent_selection
+    if selector_for.nil?
+      jump_to_state :_send_recordset
+    else
+      return select_record(selector_for) + js_choose_id(selector_for) 
+      # return '>>' + js_reload_jqgrid + js_select_id(selector_for)
+    end
+  end
 
+  # The parent widget has posted a record unselected event.
+  # If this is a subgrid-type child, then clear the recordset.
+  # If this is a selector-type child, then clear the selection and resend the recordset.
+  # TODO: The resending of the recordset is generally superfluous except for the initial page load.
+  # TODO: But I do need to be sure that the initial template is drawn, so I can't really put it in _setup.
+  # TODO: I didn't want to have a "first_run" flag, but maybe it would be better?
+  def _parent_unselection
+    if selector_for.nil?
+      jump_to_state :_clear_recordset
+    else
+      # select_record(nil)
+      # _send_recordset(true, '>>' + js_select_id(nil))
+      jump_to_state :_send_recordset
+    end
+  end
+  
   # State _clear_recordset
-  # This is triggered by a parent's :recordUnselected event.
-  # It pushes an empty recordset into the JSON cache, then reloads the grid
+  # This is called from a state jump from _parent_unselection.
+  # It pushes an empty recordset into the JSON cache, then reloads the grid.
+  # It also triggers a recordUnselected event of its own to let its children know.
   def _clear_recordset
-    trigger(:recordUnselected) # Keep passing the word down the tree
+    trigger(:recordUnselected)
     return '>>' + js_push_json_to_cache(empty_json) + js_reload_jqgrid
   end
   
-  # State _reflect_child_update
+  # State _child_choice
+  # This is triggered by a child's :recordChosen event.
+  # But which child? It makes a difference!
+  def _child_choice
+    puts "HELLO FROM CHILD CHOICE, NOT SURE HOW TO UPDATE @RECORD RIGHT YET..."
+    return ''
+  end
+  
+  # State _child_updated
   # This is triggered by a child's :recordUpdated event.
   # This is the handler for :recordUpdated, which a child sends to a parent to request a reload, since
   # sometimes the child's data might be reflected in the parent table.  It just calls _send_recordset, but
   # without the superfluous downward message-passing, and with a preservation of the selection.
   # I'd use jump_to_state, but I'd have to set a transient instance variable to pass along the parameter.
-  def _reflect_child_update(inject_js = '')
+  def _child_updated(inject_js = '')
     _send_recordset(false, inject_js)
   end
   
-  # This is a state that returns the JSON data for the recordset.
-  # It is no longer suitable for serving as a jqGrid data source because it requires the records to
-  # have been loaded first (as well as the pagination parameters)
-  def _json_for_jqgrid(records)
-    # @page = (param(:page) || @page || 1).to_i
-    # @rows_per_page = (param(:rows) || @rows_per_page || 20).to_i
-    # @sidx = (param(:sidx) || @sidx || 'name')
-    # @sord = (param(:sord) || @sord || 'asc')
-    # @search = (param(:_search) || @search || '')
-    # @livesearch = (param(:_livesearch) || @livesearch || '')
-    # records = load_records
-    json = {
-      :page => @page,
-      :total => @total_pages, 
-      :records => @total_records,
-      :rows => grid_rows(records)
-    }.to_json
-  end
-
   # State _cell_click
   # This is triggered by a widget firing an :cellClick event.
   # If you want to do something other than open a panel here, override act_on_cell_click
@@ -179,18 +255,27 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # This is the main action for the _cell_click, it opens an edit panel.
   # You could have it do something else depending on the column by overriding it.
   def act_on_cell_click(col)
-    open_edit_panel(col)
-  end
-  
-  def open_edit_panel(col)
+    emit = ''
     if col == 'row'
-      partial_to_render = @row_object
+      case @row_action
+      when 'title_panel', 'panel'
+        emit = render :view => @row_object
+      end
     else
-      partial_to_render = @columns[col.to_i][:object]
+      puts @columns.inspect
+      case @columns[col.to_i][:action]
+      when 'title_panel', 'panel'
+        emit = render :view => @columns[col.to_i][:object]
+      when 'choice'
+        emit = js_choose_id(@record.id)
+        trigger(:recordChosen)
+      else
+        puts "UNRECOGNIZED CELL CLICK TYPE: " + @columns[col.to_i][:action].to_s
+      end
     end
-    render :view => partial_to_render
+    return emit
   end
-  
+    
   # State _edit_panel_submit
   # This is the target of the edit panel's form submission.
   def _edit_panel_submit
@@ -202,7 +287,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     inject_js = <<-JS
       closeEditPanel('##{@jqgrid_id}');
     JS
-    _reflect_child_update(inject_js) # reload as if we got an updated message from a hypothetical child
+    _child_updated(inject_js) # reload as if we got an updated message from a hypothetical child
   end
   
   # TODO: The controller code refers to a _edit_panel_cancel state, but I see no trace of it here.
@@ -326,8 +411,21 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     @columns << options
   end
   
-  # RECORDSET PROCESSING
+  # This is a special add_column variant for adding a choice column with the standard options.
+  # Use in place of add_column with _setup, note that it does not need a field name
+  def add_choice_column(options = {})
+    add_column(choice_mark_column_name, {:custom => :row_choice, :label => choice_mark_column_icon,
+      :action => 'choice'}.merge(options))
+  end
   
+  # Standard custom method for choice marking.
+  # The idea is that you set a column's :custom => :row_choice, and 
+  def row_choice(row)
+    return (selector_for == row.id) ? chosen_icon : not_chosen_icon
+  end
+    
+  # RECORDSET PROCESSING
+
   # State _send_recordset (returns Javascript, called with jQuery.getScript)
   # This is called by the jQGrid data source function (retrieveJSON, defined in jqgrid_widget.js) if there
   # is no data already in the cache.  It should result in Javascript code to push the recordset into the cache
@@ -337,7 +435,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # Apotomo will then bundle all of this together before sending it back to the browser.
   #
   # This is also the handler for :recordSelected events sent by a parent to its children.
-  # The children_unaware parameter is set to false if the child itself has triggered this (used in _reflect_child_update).
+  # The children_unaware parameter is set to false if the child itself has triggered this (used in _child_updated).
   # If there was a record selected before, try to maintain that selection. However if the record is no longer there,
   # communicate to the children than they should reset.
   # TODO: It should be possible to add an id=@record.id to the conditions load_record uses to determine whether
@@ -346,8 +444,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # TODO: Figure out how I can make it jump if the search string is an exact match.
   def _send_recordset(children_unaware = true, inject_js = '')
     records = load_records
-    inject_js += js_push_json_to_cache(_json_for_jqgrid(records)) + js_reload_jqgrid
-    # inject_js += js_push_json_to_cache(_json_for_jqgrid) + js_reload_jqgrid
+    inject_js += js_push_json_to_cache(json_for_jqgrid(records)) + js_reload_jqgrid
+    # inject_js += js_push_json_to_cache(json_for_jqgrid) + js_reload_jqgrid
     # If the children are aware, that means we arrived here just to do a refresh, no change in the filter.
     # However, that could still affect the records included in the parent recordset (if the child's change
     # means that the parent no longer meets the criteria).
@@ -405,17 +503,17 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     return '>>' + inject_js
   end
     
-  # When a row is clicked, the controller's row selection handler gets the notification and sends it here.
-  # This announces to the children that a record was selected, much as _send_recordsets does.
-  # TODO: This is redundantly checked for in the Javascript, perhaps it is not worth also checking here for a change.
-  def select_record(id)
-    unless @record && @record.id == id #only announce if there was a change.
-      @record = resource_model.find_by_id(id)
-      trigger(:recordSelected)
-    end
+  # This returns the JSON data for the recordset, assumes records and pagination parameters have already been loaded
+  def json_for_jqgrid(records)
+    json = {
+      :page => @page,
+      :total => @total_pages, 
+      :records => @total_records,
+      :rows => grid_rows(records)
+    }.to_json
   end
   
-  # Turn @records into something appropriate for the _json_for_jqgrid method
+  # Turn @records into something appropriate for the json_for_jqgrid method
   def grid_rows(records)
     records.collect do |r|
       {
@@ -533,6 +631,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   end
   
   # Javascript to set (or reset if no id is passed in) the selection in the jqgrid.
+  # The jqGrid docs suggest that setSelection is actually a TOGGLE.  If this ever misbehaves,
+  # then it might be good to first resetSelection and then setSelection.
   def js_select_id(id = nil)
     if id
       return <<-JS
@@ -544,7 +644,24 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
       JS
     end
   end
-  
+
+  # Javascript to set the choice mark on the jqGrid (unset all others), then reset.
+  def js_choose_id(id = nil)
+    if id
+      return <<-JS
+        var g = jQuery('##{@jqgrid_id}'),
+        ids = g.getDataIDs();
+        if (ids.length > 0) {
+          for (id in ids) {
+            g.setRowData(id,{'#{choice_mark_column_name}':(id=='#{id}')?('#{chosen_icon}'):('#{not_chosen_icon}')});
+          }
+        }
+      JS
+    else
+      return ''
+    end
+  end
+      
   # Javascript to push a JSON dataset into the cache to be used on the next reload.
   def js_push_json_to_cache(raw_json_data)
     json_data = escape_javascript(raw_json_data)

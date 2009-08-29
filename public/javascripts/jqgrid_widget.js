@@ -89,7 +89,6 @@ function pushJSON(table,json) {
 // 'panel' open a panel (probably an edit panel) with the contents of the url under the selected row
 // 'event' trigger an event (probably a selection to be transmitted to another widget)
 // title_panel is true if a panel will open in the title bar region, false if it will open under the clicked-on row.
-// The openRowPanel function is designed to be a callback for jQGrid's onCellSelect event.
 function clickAction(rowid,cellindex,target,url,actions) {
 	var t = jQuery(target).closest('.ui-jqgrid-btable'),
 	v = jQuery(target).closest('.ui-jqgrid-view'),
@@ -102,6 +101,7 @@ function clickAction(rowid,cellindex,target,url,actions) {
 	}
 	switch(action) {
 		case 'event':
+		case 'choice':
 			jQuery.get(url, specs, null, 'script');
 			break;
 		case 'panel':
@@ -144,9 +144,6 @@ function clickAction(rowid,cellindex,target,url,actions) {
 					});
 			}
 			break;
-	}
-	if(cellindex == 'row' || panels.length == 0 || panels[cellindex] == 1) {
-
 	}
 }
 

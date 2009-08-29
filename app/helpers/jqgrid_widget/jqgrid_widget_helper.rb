@@ -163,8 +163,9 @@ module JqgridWidget::JqgridWidgetHelper
       if(ids != jQuery('##{@jqgrid_id}').getGridParam('selrow')){
         #{wire_jqgrid_rowselect_set_children_loading}
         closeEditPanel('##{@jqgrid_id}');
-        #{wire_jqgrid_rowselect_open_panel(:edit)}
       }
+      #{wire_jqgrid_rowselect_open_panel(:edit)}
+      return true;
       JS
     end
     return <<-JS
