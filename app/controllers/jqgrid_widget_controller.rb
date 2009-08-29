@@ -71,10 +71,8 @@ class JqgridWidgetController < ApplicationController
     # Create the widget
     x = cell_class.new(controller, widget_id, :_setup, :resource => resource, :jqgrid_id => jqgrid_id,
       :prefix => pfx, :top_widget => top_widget)
-    # Set up the event watchers for the edit panel
-    # TODO: What's up with _edit_panel_cancel? There's no such state in jqgrid_widget_cell.
-    x.watch(:openEditPanel, x.name, :_edit_panel, x.name)
-    x.watch(:editPanelCancel, x.name, :_edit_panel_cancel, x.name)
+    # Set up the event watchers for the cells
+    x.watch(:cellClick, x.name, :_cell_click, x.name)
     # Return the widget
     return x
   end

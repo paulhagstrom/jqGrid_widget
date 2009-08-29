@@ -38,8 +38,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # @children_to_trigger (ids of the tables that will be put into a 'loading...' state upon a row select)
   # @select_first (true if the first record should be selected immediately upon loading the table)
   # @records_per_page (in principle the number of records per page when using paginator, not tested)
-  # @row_panel (partial to render when a row is clicked, defaults to 'panel')
-  # @row_panel_under_row (true if the panel should render under the row clicked on, defaults to false)
+  # @row_action = 'title_panel', 'row_panel', or 'event'
+  # @row_object = partial to render when a row is clicked for (title_panel, row_panel)
   #
   # def _setup
   #   super do |col|
@@ -62,8 +62,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     @filters = [['all', {:name => 'All'}]]
     
     @columns  = []
-    @row_panel = '_panel'
-    @row_panel_under_row = false
+    @row_action = 'title_panel'
+    @row_object = '_panel'
     
     # Make settings available to the helper.
     # Several of these have been derived from instance methods, because I need them to be available
@@ -75,12 +75,15 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     @select_on_load = select_on_load
     @prefix = param(:prefix)
     @is_top_widget = param(:top_widget)
-    @column_indices = @columns.map {|c| c[:index]}
     
     @record = resource_model.new
     
     yield self if block_given?
     
+    @sortable_columns = (@columns.map {|c| c[:sortable] ? c[:index] : nil}).compact
+    puts "sortable columns: " + @sortable_columns.inspect
+    @default_sidx = (@columns.map {|c| c[:sortable] == 'default' ? c[:index] : nil}).compact.first
+    puts "default sidx: " + @default_sidx.inspect
     nil
   end
  
@@ -108,7 +111,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # defined off of that (and transition_map is what Apotomo itself consults).
   # TODO: Once this is all better defined, I should tighten this up probably, though it works as-is.
   def transitions_all
-    [:_json_for_jqgrid, :_edit_panel, :_edit_panel_submit,
+    [:_json_for_jqgrid, :_cell_click, :_edit_panel_submit,
       :_reflect_child_update, :_send_recordset, :_clear_recordset, :_set_filter,
       :_filter_display, :_filter_counts, :_setup]
   end
@@ -119,7 +122,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
       :_send_recordset => ([:_send_recordset] + transitions_all).uniq,
       :_clear_recordset => ([:_clear_recordset] + transitions_all).uniq,
       :_json_for_jqgrid => ([:_json_for_jqgrid] + transitions_all).uniq,
-      :_edit_panel => ([:_edit_panel] + transitions_all).uniq,
+      :_cell_click => ([:_cell_click] + transitions_all).uniq,
       :_edit_panel_submit => ([:_edit_panel] + transitions_all).uniq,
       :_reflect_child_update => ([:_reflect_child_update] + transitions_all).uniq,
       :_set_filter => ([:_set_filter] + transitions_all).uniq,
@@ -165,18 +168,29 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     }.to_json
   end
 
-  # State _edit_panel
-  # This is triggered by a widget firing an :openEditPanel event
-  def _edit_panel
+  # State _cell_click
+  # This is triggered by a widget firing an :cellClick event.
+  # If you want to do something other than open a panel here, override act_on_cell_click
+  def _cell_click
     @record = scoped_model.find_by_id(param(:id)) || scoped_model.new
-    if param(:panel) == 'row'
-      panel = @row_panel
-    else
-      panel = @columns[param(:panel).to_i][:panel]
-    end
-    render :view => panel
+    act_on_cell_click(param(:cell_column))
   end
 
+  # This is the main action for the _cell_click, it opens an edit panel.
+  # You could have it do something else depending on the column by overriding it.
+  def act_on_cell_click(col)
+    open_edit_panel(col)
+  end
+  
+  def open_edit_panel(col)
+    if col == 'row'
+      partial_to_render = @row_object
+    else
+      partial_to_render = @columns[col.to_i][:object]
+    end
+    render :view => partial_to_render
+  end
+  
   # State _edit_panel_submit
   # This is the target of the edit panel's form submission.
   def _edit_panel_submit
@@ -295,8 +309,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # formatted as Javascript.
   # The jqGridWidget itself has a couple of internal column options as well.
   # :custom => :method_name (method in cell definition to provide output for the cell, via self.send :method_name)
-  # :panel => name of partial to render for a cell_select form, or '' for no trigger there.
-  # :panel_under_row => true if the edit panel should render under the row (otherwise it will be in the title area)
+  # :action => 'row_panel', 'title_panel', or 'event' (or nothing, for no cell select action)
+  # :object => name of partial to render (row_panel, title_panel) or something about the event.
   def add_column(field, options = {})
     # jqGrid options
     options[:index] = field
@@ -306,8 +320,9 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     options[:search] = false unless options.has_key?(:search)
     options[:sortable] = false unless options.has_key?(:sortable)
     # jqGridWidget options
-    options[:panel] ||= ''
-    options[:panel_under_row] = false unless options.has_key?(:panel_under_row)
+    options[:action] ||= 'event'
+    options[:object] ||= ''
+    # options[:panel_under_row] = false unless options.has_key?(:panel_under_row)
     @columns << options
   end
   
@@ -416,7 +431,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   def get_paging_parameters
     @page = (param(:page) || @page || 1).to_i
     @rows_per_page = (param(:rows) || @rows_per_page || 20).to_i
-    @sidx = (param(:sidx) || @sidx || 'name')
+    @sidx = (param(:sidx) || @sidx || @default_sidx)
     @sord = (param(:sord) || @sord || 'asc')
     # @search = (param(:_search) || @search || '')
     livesearch = param(:livesearch)
@@ -434,9 +449,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   def load_records
     get_paging_parameters
     @filter, @subfilter, find_include, find_conditions, @total_records = filter_prepare
-    sord = (@sord == 'desc') ? 'DESC' : 'ASC'
-    sidx = (@column_indices.include?(@sidx) ? @sidx : @columns[0][:index])
-    find_order = "#{sidx} #{sord}"
+    find_order = @sortable_columns.include?(@sidx) ? (@sidx + ' ' + ((@sord == 'desc') ? 'DESC' : 'ASC')) :
+      (@default_sidx ? @default_sidx + ' ASC' : nil)
     if @rows_per_page > 0
       @total_pages = (@total_records > 0 && @rows_per_page > 0) ? 1 + (@total_records/@rows_per_page).ceil : 0
       @page = @total_pages if @page > @total_pages

@@ -78,86 +78,81 @@ function pushJSON(table,json) {
 // JqgridWidget functions:
 
 // This opens an edit panel under the row whose row/cell was clicked on.
+// This can be called either by a row click or a cell click
+// When called as a row click, actions should be a singleton array, cellindex 0.
+// When called as a cell click, actions should have one element per column, cellindex is the 0-based column.
+// This breaks down if you have single-column rows; they'll be treated as row clicks.  So?
+// Even for a cell click, the target url to be loaded must remain constant across an entire row;
+// the column will be passed back as a parameter.
+// Actions:
+// 'title_panel' open a panel (probably an edit panel) with the contents of url in the title bar
+// 'panel' open a panel (probably an edit panel) with the contents of the url under the selected row
+// 'event' trigger an event (probably a selection to be transmitted to another widget)
+// title_panel is true if a panel will open in the title bar region, false if it will open under the clicked-on row.
 // The openRowPanel function is designed to be a callback for jQGrid's onCellSelect event.
-function openRowPanel(rowid,cellindex,html,target,url,panels) {
-	if(cellindex == 'row' || panels.length == 0 || panels[cellindex] == 1) {
-		var t = jQuery(target).closest('.ui-jqgrid-btable'),
-		v = jQuery(target).closest('.ui-jqgrid-view'),
-		//w = v.width,
-		w = t.css('width'),
-		id = t.attr('id'),
-		r = t.find('#' + rowid),
-		exep_dom = v.find('.jqgw-form'),
-		exep = (exep_dom.length > 0),
-		pid = id + '_panel' + rowid + '_' + cellindex;
-		// unfocus anything already focused, then focus the cell that was clicked on
-		// might be better to use .ui-state-focus, but it wasn't very visible
-		if (cellindex != 'row') {
-			var c = r.find('td:eq(' + cellindex + ')');
-			t.find('.jqgw_cell_focus').removeClass('jqgw_cell_focus');
-			c.addClass('jqgw_cell_focus');
-		}
-		// if there are any panels open already, tell them to close
-		//t.find('.open_edit_panel').removeClass('open_edit_panel').addClass('closing_edit_panel');
-		// add the panel
-		// for some reason I need to explicitly set the widths
-		//var w = t.css('width');
-		//var row_content = '<tbody id="tbody_' + pid + '" style="display:none;width:' + w + ';">' + '<tr style="">' + '<td id="td_' + pid + '" style="width:' + w + ';" colspan="8">' + 'Loading editing panel...' + '</td></tr></tbody>';
-		//r.after(row_content);
-		var ntb = document.createElement('tbody'),
-		jqntb = jQuery(ntb).addClass('jqgw-form').hide().width(w).
-			css('height','auto').attr('id','tbody_'+pid).insertAfter(r),
-		nr = document.createElement('tr'),
-		jqr = jQuery(nr).width(w).appendTo(jqntb),
-		ntd = document.createElement('td'),
-		jqntd = jQuery(ntd).width(w).attr('colspan', r.attr('cells').length).html('Loading edit panel...').appendTo(jqr).load(url,
-		//t.find('#td_' + panelId).load(url,
-			{'id': rowid, 'table': id, 'panel': cellindex, 'authenticity_token': rails_authenticity_token},
-			function(data) { 
-				if(exep) exep_dom.slideUp('normal', function() { jQuery(this).remove();});
-				jQuery(ntb).slideDown('normal');
-				//t.find('.closing_edit_panel').slideUp('normal', function() { jQuery(this).remove();});
-				//pi.css({'display':'block'});
-				//po.addClass('open_edit_panel').slideDown('normal');
-			},'script');
+function clickAction(rowid,cellindex,target,url,actions) {
+	var t = jQuery(target).closest('.ui-jqgrid-btable'),
+	v = jQuery(target).closest('.ui-jqgrid-view'),
+	id = t.attr('id'),
+	specs = {'id': rowid, 'table': id, 'cell_column': cellindex, 'authenticity_token': rails_authenticity_token};
+	if(cellindex == 'row'){
+		action = actions[0];
+	} else {
+		action = actions[cellindex];
 	}
-}
-
-// This opens an edit panel under the title/toolbar
-// The openTitlePanel function is designed to be the callback for jQGrid's onSelectRow or onCellSelect events.
-// Firebug will sometimes announce an error if you happen to mouseover the edit panel div.
-// After much fiddling with this, I have concluded that this is actually a bug in Firebug, and not this.
-function openTitlePanel(rowid,cellindex,html,target,url,panels) {
+	switch(action) {
+		case 'event':
+			jQuery.get(url, specs, null, 'script');
+			break;
+		case 'panel':
+		case 'title_panel':
+			var xpans = v.find('.jqgw-form');
+			if(action=='title_panel') {
+				var nd = document.createElement('div'),
+				w = v.css('width'),
+				hd = v.find('.ui-jqgrid-hdiv'),
+				pid = 'panel_'+id,
+				jqnd = jQuery(nd).addClass('jqgw-form').hide().width(w).
+					css('height','auto').attr('id','incoming_edit_panel').insertBefore(hd);
+				jqnd.load(url, specs, function(data) {
+						if(xpans.length > 0) xpans.slideUp('normal', function() { jQuery(this).remove();});
+						jqnd.slideDown('normal', function() {
+							jqnd.attr('id', pid);
+						});
+					});		
+			} else {
+				var r = t.find('#' + rowid),
+				w = t.css('width'),
+				panel_id = id + '_panel' + rowid + '_' + cellindex;
+				// unfocus anything already focused, then focus the cell that was clicked on
+				// It might be better to use .ui-state-focus, but it wasn't very visible
+				if (actions.length > 1) { // only if this is a cell click, not a row click
+					var c = r.find('td:eq(' + cellindex + ')');
+					t.find('.jqgw_cell_focus').removeClass('jqgw_cell_focus');
+					c.addClass('jqgw_cell_focus');
+				}
+				var ntb = document.createElement('tbody'),
+				jqntb = jQuery(ntb).addClass('jqgw-form').hide().width(w).
+					css('height','auto').attr('id','tbody_'+pid).insertAfter(r),
+				nr = document.createElement('tr'),
+				jqr = jQuery(nr).width(w).appendTo(jqntb),
+				ntd = document.createElement('td'),
+				jqntd = jQuery(ntd).width(w).attr('colspan', r.attr('cells').length).html('Loading edit panel...').appendTo(jqr).load(url,
+					specs, function(data) { 
+						if(xpans.length > 0) xpans.slideUp('normal', function() { jQuery(this).remove();});
+						jQuery(ntb).slideDown('normal');
+					});
+			}
+			break;
+	}
 	if(cellindex == 'row' || panels.length == 0 || panels[cellindex] == 1) {
-		var t = jQuery(target).closest('.ui-jqgrid-btable'),
-		v = jQuery(target).closest('.ui-jqgrid-view'),
-		id = t.attr('id'),
-		w = v.css('width'),
-		//w = v.width,
-		nd = document.createElement('div'),
-		hd = v.find('.ui-jqgrid-hdiv'),
-		exep_dom = v.find('.jqgw-form'),
-		exep = (exep_dom.length > 0),
-		ep_id = 'ep_'+id,
-		jqnd = jQuery(nd).addClass('jqgw-form').hide().width(w).
-			css('height','auto').attr('id','incoming_edit_panel').insertBefore(hd);
-		jqnd.load(url,
-			{'id': rowid, 'table': id, 'panel': cellindex, 'authenticity_token': rails_authenticity_token},
-			function(data) {
-				if(exep) exep_dom.slideUp('normal', function() { jQuery(this).remove();});
-				//if(exep) exep_dom.slideUp('fast');
-				jqnd.slideDown('normal', function() {
-					//if(exep) exep_dom.remove();
-					jqnd.attr('id', ep_id);
-				});
-			});		
+
 	}
 }
 
 // This closes an edit panel in the title/toolbar area (in response to submit or cancel)
 function closeEditPanel(table) {
 	jQuery(table).closest('.ui-jqgrid-view').find('.jqgw-form').slideUp('normal', function () {
-		if(jqgw_debug > 1) console.log('closeEditPanel: slide up complete. About to remove myself.');
 		jQuery(this).remove();
 	});
 }
