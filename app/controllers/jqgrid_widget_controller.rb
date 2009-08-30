@@ -4,8 +4,6 @@ class JqgridWidgetController < ApplicationController
   # JqgridWidgetController takes Apotomo::Controller methods and applies a couple of
   # patches, and adds two shortcuts for standardizing/simplifying the addition of
   # jqgrid_widgets to the widget tree with proper communication channels open between them.
-  # It also adds an externally-called method (handle_select) which jQGrid itself triggers
-  # when a row is selected.
   
   # Bring in Apotomo's controller methods, but redefine render_page_update_for to
   # a) avoid reliance on Prototype, b) allow direct Javascript emission.
@@ -21,6 +19,7 @@ class JqgridWidgetController < ApplicationController
   # I'm trying to get rid of this global method.  Please work.
   def index
     # respond_to_event :rowClick, :with => :handle_select  
+    # respond_to_event :recordChosen, :with => :handle_choice
   end
   
   protected
@@ -72,9 +71,8 @@ class JqgridWidgetController < ApplicationController
     # Create the widget
     x = cell_class.new(controller, widget_id, :_setup, :resource => resource, :jqgrid_id => jqgrid_id,
       :prefix => pfx, :top_widget => top_widget)
-    # Set up the event watcher for the cells
+    # Set up the event watchers for the cells and rows
     x.watch(:cellClick, x.name, :_cell_click, x.name)
-    # Set up the event watcher for the rows
     x.watch(:rowClick, x.name, :_row_click, x.name)
     # Return the widget
     return x
@@ -98,7 +96,8 @@ class JqgridWidgetController < ApplicationController
     parent_cell.watch(:recordSelected, child_cell.name, :_parent_selection, parent_cell.name)
     parent_cell.watch(:recordUnselected, child_cell.name, :_parent_unselection, parent_cell.name)
     parent_cell.watch(:recordUpdated, parent_cell.name, :_child_updated, child_cell.name)
-    parent_cell.watch(:recordChosen, parent_cell.name, :_child_choice, child_cell.name)
+    # parent_cell.watch(:recordChosen, parent_cell.name, :_child_choice, child_cell.name)
+    child_cell.watch(:recordChosen, child_cell.name, :_child_choice, child_cell.name)
   end
     
   # A shortcut for embed_widget(parent, child = jqgrid_widget('resource', opts...))
@@ -108,13 +107,22 @@ class JqgridWidgetController < ApplicationController
     embed_widget(parent_cell, child_cell = jqg_widget(resource, opts))
     return child_cell
   end
-  
-  # When a row is clicked, jqgrid is set to inquire here for some Javascripts to execute.
-  # This calls #select_record on the source widget, which will load its @record and announce :recordChanged.
-  # Its children will be looking for that, and will fire as needed.
+
+  # This was the old handle_select, which I want to investigate a bit, since it is one of the only
+  # places that I know of where I get access to the information about an event's source.
+  # Or maybe event actually works, I haven't tried it.  No.  There may be no workaround except
+  # to have this kind of global event handler that will then pass the source back down.
+  # What I guess I would do is have a global handler for recordChosen and.. what? Who gets the
+  # information? The source would be the selector widget.  I guess I tell its parent.
+  # event.source.parent.update_choice(params[:id])
+  # something like that. Let's try it.
   # def handle_select(event)
   #   event.source.select_record(params[:id])
   #   ''
   # end
-      
+  # Er, but I'm a doofus.  Parent would work just as well in a local handler.
+  # def handle_choice(event)
+  #   event.source.parent.update_choice(params[:id])
+  # end
+  
 end

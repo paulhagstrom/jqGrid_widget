@@ -12,6 +12,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   helper :all
   # Make some of the methods defined here available to the view as well
   helper_method :js_reload_grid, :js_select_id, :js_push_json_to_cache, :empty_json
+  helper_method :param
+  # helper_method :selector_field_id
   # Make the JqgridWidgetHelper methods available to the view; these appear not to be noticed by helper :all
   helper JqgridWidget::JqgridWidgetHelper
   
@@ -76,7 +78,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     @prefix = param(:prefix)
     @is_top_widget = param(:top_widget)
     
-    @record = resource_model.new
+    # @record = resource_model.new
+    @record = scoped_model.new
     
     yield self if block_given?
     
@@ -95,13 +98,35 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     resource_model
   end
 
-  # If this is child selector widget, put the field from which the ID is drawn here.
-  # E.g., parent.record.thingie_id.to_i.  If this returns nil, it is presumed to be a subgrid-type child.
-  # Note: the .to_i is important, nil means this is not a child selector, 0 means that no id is selected.
+  # If this is child selector widget, put the field from which the ID is drawn here, as a symbol.
+  # E.g., :thingie_id.  If this returns nil, it is presumed to be a subgrid-type child.
   def selector_for
     nil
   end
+
+  # This retrieves the current value of the parent's field named in selector_for above
+  def selector_field_value
+    puts 'HI. SFV HERE. sel4 is ' + selector_for.to_s
+    # if parent.record
+    #   'parent record says this is currently : ' + parent.record[selector_for].to_s
+    # else
+    #   puts 'parent.record not set.'
+    # end
+    parent.record[selector_for] rescue nil
+    # parent.record.attributes[selector_for] rescue nil
+  end
   
+  # This fakes the output for santize_for_id("resource[selector_for]")
+  # def selector_field_id
+  #   parent.resource + '_' + selector_for.to_s
+  # end
+  
+  # This determines the string that is printed to represent the selection
+  # Should be something like @record[:name].  Very likely you'll need to set this yourself.
+  # def selector_display_value
+  #   @record[:name]
+  # end
+    
   # If this widget is supposed to immediately select the first item in a list, set this to true
   # (This is useful for lists that are not that likely to have multiple entries, but for which there are children)
   # This should be false if nothing should be selected automatically, 'unique' if only a unique record should be
@@ -179,11 +204,12 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
         trigger(:recordSelected)
         return '>>' + js_select_id(id)
       else
-        @record = resource_model.new
+        # @record = resource_model.new
+        @record = scoped_model.new
         trigger(:recordUnselected)
-        return ''
       end
     end
+    return ''
   end
   
   # Family communications
@@ -193,11 +219,11 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # If this is a selector-type child, then set the selection to the linked field.
   # TODO: Note, this might go badly for widgets with paginators, since it does not at present jump to the right page.
   def _parent_selection
-    if selector_for.nil?
-      jump_to_state :_send_recordset
+    if selector_for
+      return select_record(selector_field_value) + js_choose_id(selector_field_value)
     else
-      return select_record(selector_for) + js_choose_id(selector_for) 
-      # return '>>' + js_reload_jqgrid + js_select_id(selector_for)
+      jump_to_state :_send_recordset
+      # return '>>' + js_reload_jqgrid + js_select_id(selector_field_value)
     end
   end
 
@@ -208,12 +234,12 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # TODO: But I do need to be sure that the initial template is drawn, so I can't really put it in _setup.
   # TODO: I didn't want to have a "first_run" flag, but maybe it would be better?
   def _parent_unselection
-    if selector_for.nil?
-      jump_to_state :_clear_recordset
-    else
+    if selector_for
       # select_record(nil)
       # _send_recordset(true, '>>' + js_select_id(nil))
       jump_to_state :_send_recordset
+    else
+      jump_to_state :_clear_recordset
     end
   end
   
@@ -225,13 +251,27 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     trigger(:recordUnselected)
     return '>>' + js_push_json_to_cache(empty_json) + js_reload_jqgrid
   end
-  
-  # State _child_choice
-  # This is triggered by a child's :recordChosen event.
-  # But which child? It makes a difference!
-  def _child_choice
-    puts "HELLO FROM CHILD CHOICE, NOT SURE HOW TO UPDATE @RECORD RIGHT YET..."
-    return ''
+    
+  # This is called in the parent by the child to pick up the choice from the child.
+  # TODO: Put the Javascript somewhere better if I can
+  def update_choice(source, subrecord)
+    if selector = @selectors[source]
+      field, custom = selector
+      resource_field = resource + '_' + field.to_s
+      # TODO: If there happens to be a record, but the edit panel is closed (canceled), it should create a new one.
+      unless @record
+        @record = scoped_model.new
+      end
+      @record[field] = subrecord.id
+      display_value = escape_javascript(self.send(custom, @record.clone))
+      return <<-JS
+        var f = jQuery("##{@jqgrid_id}").closest('.ui-jqgrid-view').find('.jqgw-form');
+        f.find('#display_#{resource_field}').html('#{display_value}').effect('highlight');
+        f.find('##{resource_field}').val('#{subrecord.id}');
+        JS
+    else
+      return ''
+    end
   end
   
   # State _child_updated
@@ -254,6 +294,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
 
   # This is the main action for the _cell_click, it opens an edit panel.
   # You could have it do something else depending on the column by overriding it.
+  # actions 'panel' and 'title_panel' are expecting html, 'choice' is expecting Javascript.
   def act_on_cell_click(col)
     emit = ''
     if col == 'row'
@@ -267,8 +308,9 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
       when 'title_panel', 'panel'
         emit = render :view => @columns[col.to_i][:object]
       when 'choice'
-        emit = js_choose_id(@record.id)
-        trigger(:recordChosen)
+        emit = js_choose_id(@record.id) + parent.update_choice(self.name, @record)
+        # emit = js_choose_id(@record.id) + parent.update_choice(selector_field_id, param(:id), selector_display_value)
+        # trigger(:recordChosen)
       else
         puts "UNRECOGNIZED CELL CLICK TYPE: " + @columns[col.to_i][:action].to_s
       end
@@ -421,7 +463,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # Standard custom method for choice marking.
   # The idea is that you set a column's :custom => :row_choice, and 
   def row_choice(row)
-    return (selector_for == row.id) ? chosen_icon : not_chosen_icon
+    return (selector_field_value == row.id) ? chosen_icon : not_chosen_icon
   end
     
   # RECORDSET PROCESSING
@@ -488,7 +530,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
         # inject_js += "console.log('#{@jqgrid_id}: recordSelected: #{@record.id}.');"
         # selection_survived = true
       else
-        @record = resource_model.new
+        # @record = resource_model.new
+        @record = scoped_model.new
         # inject_js += "console.log('#{@jqgrid_id}: recordUnselected.');"
         inject_js += js_select_id(nil)
         trigger(:recordUnselected) # Tell the children that we lost our selection
@@ -601,6 +644,10 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   
   # Constants and utilities
 
+  def resource
+    param(:resource)
+  end
+  
   def resource_model
     Object.const_get param(:resource).classify
   end

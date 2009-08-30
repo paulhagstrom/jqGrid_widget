@@ -289,6 +289,19 @@ module JqgridWidget::JqgridWidgetHelper
     submit_tag "Cancel", :onClick => 'closeEditPanel(this);return false;'
   end
 
+  def selector_display(selector_id)
+    if selector = @selectors[selector_id]
+      field, custom = selector
+      resource = param(:resource)
+      display_value = self.send(custom, @record)
+      <<-HTML
+      <span id='display_#{resource}_#{field}'>#{display_value}</span>
+      HTML
+    else
+      ''
+    end
+  end
+  
   # Utility function
   
   # Turn Ruby datatypes into emittable Javascript
