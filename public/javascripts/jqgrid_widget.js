@@ -90,10 +90,7 @@ function pushJSON(table,json) {
 // 'event' trigger an event (probably a selection to be transmitted to another widget)
 // title_panel is true if a panel will open in the title bar region, false if it will open under the clicked-on row.
 function clickAction(rowid,cellindex,target,url,actions) {
-	var t = jQuery(target).closest('.ui-jqgrid-btable'),
-	v = jQuery(target).closest('.ui-jqgrid-view'),
-	id = t.attr('id'),
-	specs = {'id': rowid, 'table': id, 'cell_column': cellindex, 'authenticity_token': rails_authenticity_token};
+	var specs = clickSpecsData(rowid,cellindex,target);
 	if(cellindex == 'row'){
 		action = actions[0];
 	} else {
@@ -105,49 +102,87 @@ function clickAction(rowid,cellindex,target,url,actions) {
 			jQuery.get(url, specs, null, 'script');
 			break;
 		case 'panel':
+			openRowPanel(target, specs, url, (actions.length > 1));
+			break;
 		case 'title_panel':
-			var xpans = v.find('.jqgw-form');
-			if(action=='title_panel') {
-				var nd = document.createElement('div'),
-				w = v.css('width'),
-				hd = v.find('.ui-jqgrid-hdiv'),
-				pid = 'panel_'+id,
-				jqnd = jQuery(nd).addClass('jqgw-form').hide().width(w).
-					css('height','auto').attr('id','incoming_edit_panel').insertBefore(hd);
-				jqnd.load(url, specs, function(data) {
-						if(xpans.length > 0) xpans.slideUp('normal', function() { jQuery(this).remove();});
-						jqnd.slideDown('normal', function() {
-							jqnd.attr('id', pid);
-						});
-					});		
-			} else {
-				var r = t.find('#' + rowid),
-				w = t.css('width'),
-				panel_id = id + '_panel' + rowid + '_' + cellindex;
-				// unfocus anything already focused, then focus the cell that was clicked on
-				// It might be better to use .ui-state-focus, but it wasn't very visible
-				if (actions.length > 1) { // only if this is a cell click, not a row click
-					var c = r.find('td:eq(' + cellindex + ')');
-					t.find('.jqgw_cell_focus').removeClass('jqgw_cell_focus');
-					c.addClass('jqgw_cell_focus');
-				}
-				var ntb = document.createElement('tbody'),
-				jqntb = jQuery(ntb).addClass('jqgw-form').hide().width(w).
-					css('height','auto').attr('id','tbody_'+pid).insertAfter(r),
-				nr = document.createElement('tr'),
-				jqr = jQuery(nr).width(w).appendTo(jqntb),
-				ntd = document.createElement('td'),
-				jqntd = jQuery(ntd).width(w).attr('colspan', r.attr('cells').length).html('Loading edit panel...').appendTo(jqr).load(url,
-					specs, function(data) { 
-						if(xpans.length > 0) xpans.slideUp('normal', function() { jQuery(this).remove();});
-						jQuery(ntb).slideDown('normal');
-					});
-			}
+			openTitlePanel(target, specs, url, true);
 			break;
 	}
 }
 
-// This closes an edit panel in the title/toolbar area (in response to submit or cancel)
+// create the "specs" argument
+function clickSpecsData(rowid,cellindex,target) {
+	var id = jQuery(target).closest('.ui-jqgrid-btable').attr('id');
+	return {'id': rowid, 'table': id, 'cell_column': cellindex, 'authenticity_token': rails_authenticity_token};
+}
+
+// make sure an edit panel is open in the titlebar area
+// used by the selector click function to open up a new record.
+function ensureTitlePanel(target,url) {
+	openTitlePanel(target,clickSpecsData('0','row',target),url,false);
+}
+
+// opens an edit panel in the titlebar area
+// see clickAction and clickSpecsData for target and specs
+// if reopen is false, then it will do nothing if one is already open.
+// if reopen is true, it'll destroy an existing panel and replace it with a new one.
+// TODO: It would be nicer if the slideUp and slideDown went at the same time.
+function openTitlePanel(target, specs, url, reopen) {
+	var id = specs['table'],
+	t = jQuery('#' + id),
+	v = jQuery(target).closest('.ui-jqgrid-view'),
+	xpans = v.find('.jqgw-form');
+	if(reopen || xpans.length == 0) {
+		nd = document.createElement('div'),
+		w = v.css('width'),
+		hd = v.find('.ui-jqgrid-hdiv'),
+		pid = 'panel_'+id,
+		jqnd = jQuery(nd).addClass('jqgw-form').hide().width(w).
+			css('height','auto').attr('id','incoming_edit_panel').insertBefore(hd);
+		jqnd.load(url, specs, function(data) {
+				if(xpans.length > 0) xpans.slideUp('normal', function() { jQuery(this).remove();});
+				jqnd.slideDown('normal', function() {
+					jqnd.attr('id', pid);
+				});
+			});		
+	}
+}
+
+// opens an edit panel under the selected row
+// see clickAction and clickSpecsData for target and specs
+// if do_focus is true then it will focus the selected cell and unfocus everything else (only for cell clicks)
+// TODO: It would be nicer if the slideUp and slideDown went at the same time.
+function openRowPanel(target, specs, url, do_focus) {
+	var id = specs['table'],
+	cellindex = specs['cellindex'],
+	rowid = specs['id'],
+	t = jQuery('#' + id),
+	v = jQuery(target).closest('.ui-jqgrid-view'),
+	xpans = v.find('.jqgw-form'),
+	r = t.find('#' + rowid),
+	w = t.css('width'),
+	panel_id = id + '_panel' + rowid + '_' + cellindex;
+	// unfocus anything already focused, then focus the cell that was clicked on
+	// It might be better to use .ui-state-focus, but it wasn't very visible
+	if (do_focus) {
+		t.find('.jqgw_cell_focus').removeClass('jqgw_cell_focus');
+		var c = r.find('td:eq(' + cellindex + ')');
+		c.addClass('jqgw_cell_focus');
+	}
+	var ntb = document.createElement('tbody'),
+	jqntb = jQuery(ntb).addClass('jqgw-form').hide().width(w).
+		css('height','auto').attr('id','tbody_'+pid).insertAfter(r),
+	nr = document.createElement('tr'),
+	jqr = jQuery(nr).width(w).appendTo(jqntb),
+	ntd = document.createElement('td'),
+	jqntd = jQuery(ntd).width(w).attr('colspan', r.attr('cells').length).html('Loading edit panel...').appendTo(jqr).load(url,
+		specs, function(data) { 
+			if(xpans.length > 0) xpans.slideUp('normal', function() { jQuery(this).remove();});
+			jQuery(ntb).slideDown('normal');
+		});
+}
+
+// This closes an edit panel (in response to submit or cancel)
 function closeEditPanel(table) {
 	jQuery(table).closest('.ui-jqgrid-view').find('.jqgw-form').slideUp('normal', function () {
 		jQuery(this).remove();

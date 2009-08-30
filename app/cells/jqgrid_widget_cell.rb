@@ -5,6 +5,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # In order to be able to do urlencoding, I bring in the Javascript helpers here.
   # TODO: I forget where I use this.  Is it really urlencoding?  Do I really still use it?  Check.
   include ActionView::Helpers::JavaScriptHelper 
+  # Bring in address_to_event, since I use it here (though I might like to put it somewhere else)
+  include Apotomo::ViewHelper
   # Bring in a couple of things from jRails.  Probably it would be better to simply attach jRails in full,
   # but for the moment there are only a couple of things that are needed for this to operate in jQuery alone.
   require 'jquery_apotomo_helper_methods'
@@ -60,7 +62,6 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     # @single_record_caption is a small Javascript snippet, can make use of 'row' variable.
     # for example: @single_record_caption = "'Degree track: ' + row.name"
     @find_include = nil
-    
     @filters = [['all', {:name => 'All'}]]
     
     @columns  = []
@@ -106,7 +107,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
 
   # This retrieves the current value of the parent's field named in selector_for above
   def selector_field_value
-    puts 'HI. SFV HERE. sel4 is ' + selector_for.to_s
+    # puts 'HI. SFV HERE. sel4 is ' + selector_for.to_s
     # if parent.record
     #   'parent record says this is currently : ' + parent.record[selector_for].to_s
     # else
@@ -264,7 +265,9 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
       end
       @record[field] = subrecord.id
       display_value = escape_javascript(self.send(custom, @record.clone))
+      # Because I don't have access to address_to_event here, I stored the cell click url in the jqgrid.data
       return <<-JS
+        ensureTitlePanel("##{@jqgrid_id}",jQuery('##{@jqgrid_id}').data('cell_click_url'));
         var f = jQuery("##{@jqgrid_id}").closest('.ui-jqgrid-view').find('.jqgw-form');
         f.find('#display_#{resource_field}').html('#{display_value}').effect('highlight');
         f.find('##{resource_field}').val('#{subrecord.id}');
@@ -288,10 +291,11 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # This is triggered by a widget firing an :cellClick event.
   # If you want to do something other than open a panel here, override act_on_cell_click
   def _cell_click
-    @record = scoped_model.find_by_id(param(:id)) || scoped_model.new
+    # I am going to try presuming that the row click handled the creation/location of the @record.
+    # @record = scoped_model.find_by_id(param(:id)) || scoped_model.new
     act_on_cell_click(param(:cell_column))
   end
-
+  
   # This is the main action for the _cell_click, it opens an edit panel.
   # You could have it do something else depending on the column by overriding it.
   # actions 'panel' and 'title_panel' are expecting html, 'choice' is expecting Javascript.

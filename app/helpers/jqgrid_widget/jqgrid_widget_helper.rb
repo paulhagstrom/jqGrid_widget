@@ -80,6 +80,8 @@ module JqgridWidget::JqgridWidgetHelper
     activateTitleBar('##{@jqgrid_id}');
     // replace "Loading..." with a spinner
     jQuery('#load_#{@jqgrid_id}').html("<img src='/images/indicator.white.gif'>");
+    // Store the callback url for a cell click so I can use it with regenerating it
+    jQuery('##{@jqgrid_id}').data('cell_click_url', '#{url_for(address_to_event({:type => :cellClick, :escape => false}, :data))}');
     JS
   end
   
@@ -180,11 +182,12 @@ module JqgridWidget::JqgridWidgetHelper
   # For :add mode, it does not make sense to allow a row panel, even if normally there would be one.
   # What this does is actually triggers a cellClick event on the column 'row', so the cellClick handler
   # is responsible for determining what to send back as the contents of the panel.
+  # I've stashed url_for(address_to_event({:type => :cellClick, :escape => false}, :data)) in jqgrid.data.
   def wire_jqgrid_rowselect_open_panel(mode = :edit)
     ids = (mode == :edit) ? 'ids' : "'0'"
     panel_type = (mode == :edit) ? @row_action : 'title_panel'
     <<-JS
-      clickAction(#{ids},'row','##{@jqgrid_id}','#{url_for(address_to_event({:type => :cellClick, :escape => false}, :data))}',['#{panel_type}']);
+      clickAction(#{ids},'row','##{@jqgrid_id}',jQuery('##{@jqgrid_id}').data('cell_click_url'),['#{panel_type}']);
     JS
   end
   
@@ -211,7 +214,7 @@ module JqgridWidget::JqgridWidgetHelper
       url = url_for(address_to_event({:type => :cellClick, :escape => false}, :data))
       <<-JS
       onCellSelect: function(rowid,cellindex,html,target) {
-        clickAction(rowid,cellindex,target,'#{url}',[#{row_actions.join(',')}]);
+        clickAction(rowid,cellindex,target,jQuery('##{@jqgrid_id}').data('cell_click_url'),[#{row_actions.join(',')}]);
       },
       JS
     else
