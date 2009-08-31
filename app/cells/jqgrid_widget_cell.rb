@@ -41,7 +41,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # @children_to_hide (ids of the tables that will be collapsed upon a row select)
   # @children_to_trigger (ids of the tables that will be put into a 'loading...' state upon a row select)
   # @select_first (true if the first record should be selected immediately upon loading the table)
-  # @records_per_page (in principle the number of records per page when using paginator, not tested)
+  # @rows_per_page (in principle the number of records per page when using paginator, not tested)
   # @row_action = 'title_panel', 'row_panel', or 'event'
   # @row_object = partial to render when a row is clicked for (title_panel, row_panel)
   #
@@ -79,7 +79,6 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     @prefix = param(:prefix)
     @is_top_widget = param(:top_widget)
     
-    # @record = resource_model.new
     @record = scoped_model.new
     
     yield self if block_given?
@@ -107,27 +106,9 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
 
   # This retrieves the current value of the parent's field named in selector_for above
   def selector_field_value
-    # puts 'HI. SFV HERE. sel4 is ' + selector_for.to_s
-    # if parent.record
-    #   'parent record says this is currently : ' + parent.record[selector_for].to_s
-    # else
-    #   puts 'parent.record not set.'
-    # end
     parent.record[selector_for] rescue nil
-    # parent.record.attributes[selector_for] rescue nil
   end
-  
-  # This fakes the output for santize_for_id("resource[selector_for]")
-  # def selector_field_id
-  #   parent.resource + '_' + selector_for.to_s
-  # end
-  
-  # This determines the string that is printed to represent the selection
-  # Should be something like @record[:name].  Very likely you'll need to set this yourself.
-  # def selector_display_value
-  #   @record[:name]
-  # end
-    
+      
   # If this widget is supposed to immediately select the first item in a list, set this to true
   # (This is useful for lists that are not that likely to have multiple entries, but for which there are children)
   # This should be false if nothing should be selected automatically, 'unique' if only a unique record should be
@@ -194,7 +175,6 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # For actions that occur when a row is clicked on, refer to the :cellClick handler, which also fires.
   def _row_click
     select_record(param(:id))
-    # @record = scoped_model.find_by_id(param(:id)) || scoped_model.new
   end
   
   # When a row is clicked, the controller's row selection handler gets the notification and sends it here.
@@ -224,7 +204,6 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
       return select_record(selector_field_value) + js_choose_id(selector_field_value)
     else
       jump_to_state :_send_recordset
-      # return '>>' + js_reload_jqgrid + js_select_id(selector_field_value)
     end
   end
 
@@ -232,12 +211,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # If this is a subgrid-type child, then clear the recordset.
   # If this is a selector-type child, then clear the selection and resend the recordset.
   # TODO: The resending of the recordset is generally superfluous except for the initial page load.
-  # TODO: But I do need to be sure that the initial template is drawn, so I can't really put it in _setup.
-  # TODO: I didn't want to have a "first_run" flag, but maybe it would be better?
   def _parent_unselection
     if selector_for
-      # select_record(nil)
-      # _send_recordset(true, '>>' + js_select_id(nil))
       jump_to_state :_send_recordset
     else
       jump_to_state :_clear_recordset
@@ -313,8 +288,6 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
         emit = render :view => @columns[col.to_i][:object]
       when 'choice'
         emit = js_choose_id(@record.id) + parent.update_choice(self.name, @record)
-        # emit = js_choose_id(@record.id) + parent.update_choice(selector_field_id, param(:id), selector_display_value)
-        # trigger(:recordChosen)
       else
         puts "UNRECOGNIZED CELL CLICK TYPE: " + @columns[col.to_i][:action].to_s
       end
@@ -335,8 +308,6 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     JS
     _child_updated(inject_js) # reload as if we got an updated message from a hypothetical child
   end
-  
-  # TODO: The controller code refers to a _edit_panel_cancel state, but I see no trace of it here.
   
   # State _set_filter
   # This is triggered by clicking on a filter
@@ -491,7 +462,6 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   def _send_recordset(children_unaware = true, inject_js = '')
     records = load_records
     inject_js += js_push_json_to_cache(json_for_jqgrid(records)) + js_reload_jqgrid
-    # inject_js += js_push_json_to_cache(json_for_jqgrid) + js_reload_jqgrid
     # If the children are aware, that means we arrived here just to do a refresh, no change in the filter.
     # However, that could still affect the records included in the parent recordset (if the child's change
     # means that the parent no longer meets the criteria).
@@ -508,9 +478,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
         if @select_on_load == 'unique'
           if records.size > 1
             if @livesearch
-              # puts "%%%%%%%%%%%%%% Unique check for exact match. Match to [#{@livesearch}] on [#{@livesearch_field}]"
               records.each do |r|
-                # puts "%% record #{r.id}, attributes: #{r.attributes.inspect}"
                 if r.attributes[@livesearch_field].downcase == @livesearch.downcase
                   select_record(r.id)
                   selection_survived = true
@@ -534,9 +502,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
         # inject_js += "console.log('#{@jqgrid_id}: recordSelected: #{@record.id}.');"
         # selection_survived = true
       else
-        # @record = resource_model.new
         @record = scoped_model.new
-        # inject_js += "console.log('#{@jqgrid_id}: recordUnselected.');"
         inject_js += js_select_id(nil)
         trigger(:recordUnselected) # Tell the children that we lost our selection
       end

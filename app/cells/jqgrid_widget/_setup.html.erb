@@ -1,11 +1,38 @@
+<%# This is the default _setup partial. -%>
+<%# For an application-wide default, place a (modified) copy of this in app/cells/jqgrid_widget/ -%>
+<%# html_table_to_wire places the divs in the html where the table will appear -%>
 <%= html_table_to_wire %>
-<%= wire_jqgrid(:caption => 'Placeholder',
-	:height => 50,
-	:enable_panel => false,
-	# To enable an edit panel under the titlebar:
-	# :enable_panel => 'title',
-	# :sortname => 'created_at',
-	:pager => nil,
-	:columns => @columns
-	)
-%>
+<%# wire_jqgrid sends Javascript that replaces those divs with a functioning jqgrid -%>
+<%= wire_jqgrid({
+	# :height sets the height of the jqgrid widget in pixels, default is 200.
+	# :height => 200,
+	
+	# :pager can be set to nil or {} to turn off the pagination
+	# Otherwise, set it to a hash containing :rows (initial number of rows displayed), e.g., :rows => 25
+	# and :rows_options (a comma delimited string of options for the rows popup), e.g, :rows_options => '20,50,100'
+	# default is not to have a pager.
+	# :pager => {:rows => 25, :rows_options => '20,50,100'},
+	
+	# :add_button => true (the default) will add an add button down by the navigation buttons
+	# :add_button => false will not.
+	# :add_button => true,
+	
+	# :collapsed => true will start the table out in a "collapsed" state (just the caption bar showing)
+	# :collapsed defaults to false
+	# :collapsed => false,
+	
+	# :caption is 
+	# if not set, this defaults to @caption if set, or 'Records' otherwise.
+	
+	# :initial_sort will set the sort the table is initially sorted with.
+	# By default, it will be on the first column.
+	# To pick a different column, say column 3, do this:
+	# :initial_sort => @columns[2][:index]
+	# :inital_sort => @columns[0][:index],
+	
+	# :url is the data source address.
+	# By default it is the address to the _send_recordset state of the calling widget
+	# You could set this to something else, but don't do this rashly.
+	# Whatever this points to should actually return Javascript code, intended to stuff the incoming data into a
+	# precache of data for later.  See the Javascript code in public/javascripts/jqgrid_widget.js.
+}) %>

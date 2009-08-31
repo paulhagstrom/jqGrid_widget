@@ -41,15 +41,16 @@ module JqgridWidget::JqgridWidgetHelper
   # :height => height of the grid in pixels
   # :initial_sort => something, I think it should correspond to a database table field.  TODO: Figure this out
   # :add_button => something other than false if we want to add an add button
+  # TODO: Add some more configuration here, make sure the documentation is accurate.
   def wire_jqgrid(options = {})
     options[:pager] ||= {}
     options[:pager_id] ||= @jqgrid_id + '_pager'
-    options[:height] ||= 150
-    options[:collapsed] ||= false #(options[:collapsed] != false) instead to make it default to true
+    options[:height] ||= 200
+    options[:collapsed] ||= false
     options[:url] ||= url_for(address_to_event({:state => '_send_recordset', :escape => false}))
     options[:caption] ||= @caption || 'Records'
     options[:initial_sort] ||= @columns[0][:index]
-    options[:add_button] ||= true
+    options[:add_button] ||= (options[:add_button] != false)
 
     empty_table = (@is_top_widget == 'yes') ? "jQuery('##{@jqgrid_id}');" : js_push_json_to_cache(empty_json)
     javascript_tag <<-JS
@@ -306,6 +307,7 @@ module JqgridWidget::JqgridWidgetHelper
   end
   
   # Utility function
+  # TODO: I worry a bit about potential name conflicts with these, I may want to rename make_js
   
   # Turn Ruby datatypes into emittable Javascript
   # Cf. array_or_string_to_javascript, is there an official way to do this already built in?
@@ -316,6 +318,12 @@ module JqgridWidget::JqgridWidgetHelper
         (thing.class == String ? "'#{thing}'" : thing.to_s
         )
       )
+  end
+
+  # http://errtheblog.com/posts/11-block-to-partial
+  def jqgrid_widget_block_to_partial(partial_name, options = {}, &block)
+    options.merge!(:body => capture(&block))
+    concat(render(:partial => partial_name, :locals => options))
   end
 
 end
