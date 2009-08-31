@@ -1,3 +1,5 @@
+# TODO: One bug that remains is that the add button does not necessarily clear out the record.
+# If something is selected, you wind up just editing that thing and not adding something.
 class JqgridWidgetCell < Apotomo::StatefulWidget
   # JqgridWidgetCell is the heart of the jQGrid widget, an extension of Apatomo's StatefulWidget
   # TODO: Some documentation here.

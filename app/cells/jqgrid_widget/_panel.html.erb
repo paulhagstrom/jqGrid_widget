@@ -7,9 +7,13 @@
 	# You can use the jqgrid_widget_block_to_partial line as-is, it will pick up the _panel_frame
 	# partial within the plugin, or you can put a copy in app/cells/jqgrid_widget/_panel_frame.html.erb
 	# to set up an application-wide form frame.
+	# Using the <col> tags (or a css style with a fixed width) will prevent things from hopping around
+	# when selections are made.
 -%>
 <% jqgrid_widget_block_to_partial 'jqgrid_widget/panel_frame' do %>
 	<table class="layout_table">
+		<col width='50' />
+		<col width='200' />
 		<tr>
 			<td>Placeholder</td>
 			<td>Form</td>
