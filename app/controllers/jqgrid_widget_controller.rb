@@ -7,8 +7,9 @@ class JqgridWidgetController < ApplicationController
   
   # Bring in Apotomo's controller methods, but redefine render_page_update_for to
   # a) avoid reliance on Prototype, b) allow direct Javascript emission.
+  # Update: apotomo now has an official way to output js, so I can maybe avoid this.
   include Apotomo::ControllerMethods
-  include JqueryApotomoControllerMethods
+  # include JqueryApotomoControllerMethods
   # Bring in a couple of things from jRails.  Probably it would be better to simply attach jRails in full,
   # but for the moment there are only a couple of things that are needed for this to operate in jQuery alone.
   require 'jquery_apotomo_helper_methods'
@@ -64,13 +65,17 @@ class JqgridWidgetController < ApplicationController
     # Set the defaults if they weren't passed in
     pfx = opts[:prefix] || ''
     resource_alias = opts[:resource_alias] || resource
-    cell_class = opts[:cell_class] || Object.const_get((resource_alias.pluralize + '_cell').camelize.classify)
+    # cell_class = opts[:cell_class] || Object.const_get((resource_alias.pluralize + '_cell').camelize.classify)
+    cell_class = opts[:cell_class] || Object.const_get((resource_alias.pluralize + '_cell').camelize)
     jqgrid_id = pfx + (opts[:jqgrid_id] || resource_alias.pluralize + '_list')
     widget_id = pfx + (opts[:widget_id] || resource_alias)
     top_widget = opts[:top_widget] || 'no'
     # Create the widget
-    x = cell_class.new(controller, widget_id, :_setup, :resource => resource, :jqgrid_id => jqgrid_id,
+    x = widget(cell_class, :_setup, widget_id, :resource => resource, :jqgrid_id => jqgrid_id,
       :prefix => pfx, :top_widget => top_widget)
+    # previous version here became obselete, probably due to cells update
+    # x = cell_class.new(controller, widget_id, :_setup, :resource => resource, :jqgrid_id => jqgrid_id,
+    #   :prefix => pfx, :top_widget => top_widget)
     # Set up the event watchers for the cells and rows
     x.watch(:cellClick, x.name, :_cell_click, x.name)
     x.watch(:rowClick, x.name, :_row_click, x.name)
