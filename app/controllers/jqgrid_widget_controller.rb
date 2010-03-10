@@ -18,6 +18,8 @@ class JqgridWidgetController < ApplicationController
   # This sets a global event handler on row clicks to call the #handle_select method defined later
   # in this file.
   # I'm trying to get rid of this global method.  Please work.
+  # It is possible that the super calls can be removed at this point, since clearly they aren't doing anything.
+  # Assuming that this actually works.
   def index
     # respond_to_event :rowClick, :with => :handle_select  
     # respond_to_event :recordChosen, :with => :handle_choice
@@ -66,7 +68,8 @@ class JqgridWidgetController < ApplicationController
     pfx = opts[:prefix] || ''
     resource_alias = opts[:resource_alias] || resource
     # cell_class = opts[:cell_class] || Object.const_get((resource_alias.pluralize + '_cell').camelize.classify)
-    cell_class = opts[:cell_class] || Object.const_get((resource_alias.pluralize + '_cell').camelize)
+    # cell_class = opts[:cell_class] || Object.const_get((resource_alias.pluralize + '_cell').camelize)
+    cell_class = opts[:cell_class] || (resource_alias.pluralize + '_cell').camelize
     jqgrid_id = pfx + (opts[:jqgrid_id] || resource_alias.pluralize + '_list')
     widget_id = pfx + (opts[:widget_id] || resource_alias)
     top_widget = opts[:top_widget] || 'no'
