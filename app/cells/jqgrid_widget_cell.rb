@@ -22,7 +22,26 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   helper JqgridWidget::JqgridWidgetHelper
   
   attr_reader :record
+  
+  # Options set upon creation.
+  
+  # attr_reader :resource
+  # attr_reader :resource_model
+  attr_reader :is_top_widget
   attr_reader :jqgrid_id
+  
+  # def initialize(*args)
+  #   super(*args)
+  # 
+  #   # resource and jqgrid_id are required, but will be handled by jqg_widget
+  #   # @resource = @opts[:resource]
+  #   @jqgrid_id = @opts[:jqgrid_id]
+  #   puts "Here's jqgrid_id: " + @jqgrid_id.inspect
+  #   # @resource_model = Object.const_get @opts[:resource].classify
+  #   # resource was required, so there is probably no need to guess here.
+  #   # @resource = @opts[:resource] || self.name.to_s.camelize.classify
+  #   @is_top_widget = @opts[:top_widget] || 'no'
+  # end
   
   # SETUP
   
@@ -58,8 +77,16 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # end
   # TODO: Perhaps later I may want to be able to make the default filter not be the first one?
   def _setup
-    Rails.logger.debug(params.inspect)
-    @caption = param(:resource).pluralize.humanize #'Records'
+    @jqgrid_id = @opts[:jqgrid_id]
+    puts "Here's jqgrid_id (_setup): " + @jqgrid_id.inspect
+    # @resource_model = Object.const_get @opts[:resource].classify
+    # resource was required, so there is probably no need to guess here.
+    # @resource = @opts[:resource] || self.name.to_s.camelize.classify
+    @is_top_widget = @opts[:top_widget] || 'no'
+
+    # Rails.logger.debug(params.inspect)
+    # @caption = opts(:resource).pluralize.humanize #'Records'
+    @caption = resource.pluralize.humanize #'Records'
     @collapse_if_empty = false
     @single_record_caption = false
     # @single_record_caption is a small Javascript snippet, can make use of 'row' variable.
@@ -76,11 +103,11 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     # before the widget hits the _init state.
     # TODO: Reduce the number of these to the bare minimum, once I'm sure what I need.
     # TODO: Or not, perhaps increasing them would be actually be better, for anything that need not be frozen.
-    @jqgrid_id = jqgrid_dom_id
+    # @jqgrid_id = jqgrid_dom_id
     @descendants_to_reload = descendants_to_reload
     @select_on_load = select_on_load
-    @prefix = param(:prefix)
-    @is_top_widget = param(:top_widget)
+    # @prefix = @prefix
+    # @is_top_widget = @top_widget
     
     @record = scoped_model.new
     
@@ -90,7 +117,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     puts "sortable columns: " + @sortable_columns.inspect
     @default_sidx = (@columns.map {|c| c[:sortable] == 'default' ? c[:index] : nil}).compact.first
     puts "default sidx: " + @default_sidx.inspect
-    nil
+    # render
+    # render :nothing => true
   end
  
   # To load a recordset for the table in this widget, a find call is passed to the scoped_model.
@@ -186,7 +214,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     unless @record && @record.id == id #only announce if there was a change.
       if @record = resource_model.find_by_id(id)
         trigger(:recordSelected)
-        return '>>' + js_select_id(id)
+        render :js => js_select_id(id)
+        # return '>>' + js_select_id(id)
       else
         # @record = resource_model.new
         @record = scoped_model.new
@@ -228,7 +257,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # It also triggers a recordUnselected event of its own to let its children know.
   def _clear_recordset
     trigger(:recordUnselected)
-    return '>>' + js_push_json_to_cache(empty_json) + js_reload_jqgrid
+    render :js => js_push_json_to_cache(empty_json) + js_reload_jqgrid
+    # return '>>' + js_push_json_to_cache(empty_json) + js_reload_jqgrid
   end
     
   # This is called in the parent by the child to pick up the choice from the child.
@@ -301,7 +331,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # State _edit_panel_submit
   # This is the target of the edit panel's form submission.
   def _edit_panel_submit
-    @record.update_attributes(param(param(:resource).to_sym))
+    @record.update_attributes(param(@opts[:resource].to_sym))
     @record.save
     @record.reload # Be sure we get the id if this was a new record
     trigger(:recordSelected)
@@ -381,7 +411,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
         if c.select_on_load
           d += c.descendants_to_reload
         end
-        d += [c.jqgrid_dom_id]
+        d += [c.jqgrid_id]
+        # d += [c.jqgrid_dom_id]
       end
     end
     return d
@@ -515,8 +546,9 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     end
     unless children_unaware
       trigger(:recordUpdated) # But in any event tell the parent to refresh if needed
-    end    
-    return '>>' + inject_js
+    end
+    render :js => inject_js
+    # return '>>' + inject_js
   end
     
   # This returns the JSON data for the recordset, assumes records and pagination parameters have already been loaded
@@ -618,16 +650,16 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # Constants and utilities
 
   def resource
-    param(:resource)
+    @opts[:resource]
   end
   
   def resource_model
-    Object.const_get param(:resource).classify
+    Object.const_get @opts[:resource].classify
   end
 
-  def jqgrid_dom_id
-    param(:jqgrid_id)
-  end
+  # def jqgrid_dom_id
+  #   param(:jqgrid_id)
+  # end
 
   # Overriding apotomo::stateful_widget's method
   # No frame generated by the widget, assuming that relevant divs are generated elsewhere

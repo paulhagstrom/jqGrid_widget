@@ -12,7 +12,7 @@ class JqgridWidgetController < ApplicationController
   # include JqueryApotomoControllerMethods
   # Bring in a couple of things from jRails.  Probably it would be better to simply attach jRails in full,
   # but for the moment there are only a couple of things that are needed for this to operate in jQuery alone.
-  require 'jquery_apotomo_helper_methods'
+  # require 'jquery_apotomo_helper_methods'
   
   # The index method here is intended to be called via 'super' from the subclass.
   # This sets a global event handler on row clicks to call the #handle_select method defined later
@@ -64,18 +64,23 @@ class JqgridWidgetController < ApplicationController
   # When the widget is created, it will also be told to watch for :openEditPanel and :editPanelCancel events
   # originating in its own list, and sets the handlers.
   def jqg_widget(resource, opts = {})
-    # Set the defaults if they weren't passed in
+    # cell_class is now just a string
+    # top_widget is passed along if provided
+    # jqgrid_id and resource are required by the widget
     pfx = opts[:prefix] || ''
     resource_alias = opts[:resource_alias] || resource
-    # cell_class = opts[:cell_class] || Object.const_get((resource_alias.pluralize + '_cell').camelize.classify)
-    # cell_class = opts[:cell_class] || Object.const_get((resource_alias.pluralize + '_cell').camelize)
-    cell_class = opts[:cell_class] || (resource_alias.pluralize + '_cell').camelize
-    jqgrid_id = pfx + (opts[:jqgrid_id] || resource_alias.pluralize + '_list')
     widget_id = pfx + (opts[:widget_id] || resource_alias)
-    top_widget = opts[:top_widget] || 'no'
-    # Create the widget
-    x = widget(cell_class, :_setup, widget_id, :resource => resource, :jqgrid_id => jqgrid_id,
-      :prefix => pfx, :top_widget => top_widget)
+    cell_class = opts[:cell_class] || (resource_alias.pluralize + '_cell').camelize
+    jqgrid_id = opts[:jqgrid_id] || (pfx + resource_alias.pluralize + '_list')
+    x = widget(cell_class, :_setup, widget_id, opts.merge({:resource => resource, :jqgrid_id => jqgrid_id}))
+    # # Set the defaults if they weren't passed in
+    # resource_alias = opts[:resource_alias] || resource
+    # # cell_class = opts[:cell_class] || Object.const_get((resource_alias.pluralize + '_cell').camelize.classify)
+    # # cell_class = opts[:cell_class] || Object.const_get((resource_alias.pluralize + '_cell').camelize)
+    # cell_class = opts[:cell_class] || (resource_alias.pluralize + '_cell').camelize
+    # # Create the widget
+    # x = widget(cell_class, :_setup, widget_id, :resource => resource, :jqgrid_id => jqgrid_id,
+    #   :prefix => pfx, :top_widget => top_widget)
     # previous version here became obselete, probably due to cells update
     # x = cell_class.new(controller, widget_id, :_setup, :resource => resource, :jqgrid_id => jqgrid_id,
     #   :prefix => pfx, :top_widget => top_widget)
