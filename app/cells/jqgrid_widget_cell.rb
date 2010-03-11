@@ -396,7 +396,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
         end
       end
     end
-    js_emit
+    # js_emit
+    render :js => js_emit
   end
 
   # SUPPORTING METHODS
@@ -626,6 +627,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # Prepare the instance variables for load_record, using the filter, returns things
   # used by load_records (but is also used without load_records to retrieve the
   # record counts for the individual filters)
+  # TODO: Subfilter includes are not working.  Decide whether they should be fixed or support removed.
   def filter_prepare(current_filter = @filter, subfilter = @subfilter)
     verified_filter = @filters.assoc(current_filter) ? current_filter : @filters.first[0]
     subfilter ||= {}
