@@ -1,4 +1,6 @@
 module JqgridWidget::JqgridWidgetHelper
+  include JqgridWidgetUtilities
+  
   # JqgridWidgetHelper defines a few things to use in the views to get the jqgrid_widgets in there.
   # Minimally, you need to call html_table_to_wire in the place where you want the jqgrid to be,
   # and then call wire_jqgrid to insert the Javascript that will connect the jqgrid to it.
@@ -12,12 +14,12 @@ module JqgridWidget::JqgridWidgetHelper
   #
   # You can also add filters, with html_filters and wire_filters, and a live search with html_live_search_to_wire.
   # TODO: Document this better.
-  #
+  
   # html_table_to_wire inserts an empty table and div into the html, where the grid and pager will go.
   # A subsequent call to wire_jqgrid will fill it in and start it up.
   # Relies on having @jqgrid_id set.
   def html_table_to_wire
-    # puts "html_table_to_wire"
+    # puts "Hello from html_table_to_wire: " + @cell.name.to_s
     <<-HTML
 		<table id="#{@jqgrid_id}" class="scroll" cellpadding="0" cellspacing="0"></table>
 		<div id="#{@jqgrid_id}_pager" class="scroll" style="text-align:center;"></div>
@@ -25,6 +27,9 @@ module JqgridWidget::JqgridWidgetHelper
   end
 
   # wire_jqgrid activates a table as a jqgrid, and sets a bunch of its options.
+  # @jqgrid_id (DOM id of the table) must be set ahead of time
+  # @jqgrid_options holds the general options.
+  # These can be set in the widget, or in the view as a parameter to wire_jqgrid.  View overrides widget.
   # Relies on:
   # @jqgrid_id (DOM id of table)
   # @descendant_dom_ids (structured array of DOM ids of child tables)
@@ -42,26 +47,24 @@ module JqgridWidget::JqgridWidgetHelper
   # :height => height of the grid in pixels
   # :initial_sort => something, I think it should correspond to a database table field.  TODO: Figure this out
   # :add_button => something other than false if we want to add an add button
+  # :row_action => either panel (edit panel opens under row) or title_panel (edit panel opens under title)
   # TODO: Add some more configuration here, make sure the documentation is accurate.
-  # def wjqg_test(options = {})
-  #   puts "Here is @jqgrid_id (wjqg_test): " + @jqgrid_id.inspect
-  #   # puts "Here is self (wjqg_test): " + self.jqgrid_id.inspect
-  #   # puts "Here is @controller.jqgrid_id (wjqg_test): " + @controller.jqgrid_id.inspect
-  #   puts "Here is @caption (wjqg_test): " + @caption.inspect
-  #   puts "Here is @columns (wjqg_test): " + @columns.inspect
-  #   puts "Here is @is_top_widget (wjqg_test): " + @is_top_widget.inspect
-  # end
-  def wire_jqgrid(options = {})
+  def wire_jqgrid(passed_options = {})
+    options = passed_options.merge(@jqgrid_options)
+    # Fill in all of the overall defaults if not set either directly or by the widget
     options[:pager] ||= {}
     options[:pager_id] ||= @jqgrid_id + '_pager'
     options[:height] ||= 200
     options[:collapsed] ||= false
     options[:url] ||= url_for(address_to_event({:state => '_send_recordset', :escape => false}))
-    options[:caption] ||= @caption || 'Records'
+    options[:caption] ||= 'Records'
     options[:initial_sort] ||= @columns[0][:index]
-    options[:add_button] ||= (options[:add_button] != false)
+    options[:add_button] ||= false
+    options[:row_action] ||= 'title_panel'
+    # options[:add_button] ||= (options[:add_button] != false)
     
-    empty_table = (@is_top_widget == 'yes') ? "jQuery('##{@jqgrid_id}');" : js_push_json_to_cache(empty_json)
+    empty_table = @is_top_widget ? "jQuery('##{@jqgrid_id}');" : js_push_json_to_cache(empty_json)
+    # empty_table = (@is_top_widget == 'yes') ? "jQuery('##{@jqgrid_id}');" : js_push_json_to_cache(empty_json)
     javascript_tag <<-JS
     #{empty_table}
     jQuery("##{@jqgrid_id}").jqGrid({
@@ -80,8 +83,8 @@ module JqgridWidget::JqgridWidgetHelper
       hiddengrid: #{options[:collapsed] ? 'true' : 'false'},
       #{wire_jqgrid_pager(options)}
       #{wire_jqgrid_cellselect}
-      #{wire_jqgrid_rowbeforeselect}
-      #{wire_jqgrid_load_complete}
+      #{wire_jqgrid_rowbeforeselect(options)}
+      #{wire_jqgrid_load_complete(options)}
       caption: "#{options[:caption]}"
     }).navGrid('##{options[:pager_id]}', {edit:false,add:false,del:true,search:false,refresh:false})
     #{wire_jqgrid_add_button(options)}
@@ -98,14 +101,12 @@ module JqgridWidget::JqgridWidgetHelper
   # Return the Javascript columns model (with just the jQGrid options, not the JqgridWidget options)
   # See http://www.secondpersonplural.ca/jqgriddocs/index.htm
   def wire_jqgrid_columns
-    puts "wire_jqgrid_columns"
     omit_options = [:custom, :action, :object]
-    (@columns.map {|c| make_js(c.dup.delete_if{|k,v| omit_options.include?(k)})}).join(',')
+    (@columns.map {|c| jqgrid_make_js(c.dup.delete_if{|k,v| omit_options.include?(k)})}).join(',')
   end
   
   # Return the pager options
   def wire_jqgrid_pager(options)
-    puts "wire_jqgrid_pager"
     if options[:pager].keys.size > 0
       return <<-JS
        	pginput: true,
@@ -124,7 +125,6 @@ module JqgridWidget::JqgridWidgetHelper
   
   # Add an "add" button
   def wire_jqgrid_add_button(options)
-    puts "wire_jqgrid_add_button"
     return '' unless options[:add_button]
     return <<-JS
         .navButtonAdd('##{options[:pager_id]}',{caption:'',title:'Add new record',buttonicon:'ui-icon-plus',
@@ -136,25 +136,24 @@ module JqgridWidget::JqgridWidgetHelper
   end
     
   # Prepare the reaction to the load completion.
-  def wire_jqgrid_load_complete
-    puts "wire_jqgrid_load_complete"
-    return '' unless (@collapse_if_empty || @single_record_caption)
+  def wire_jqgrid_load_complete(options)
+    return '' unless (options[:collapse_if_empty] || options[:single_record_caption])
     return <<-JS
     loadComplete: function(req) {
   		ids = jQuery('##{@jqgrid_id}').getDataIDs();
   		if (ids.length > 0) {
 		    var row = jQuery('##{@jqgrid_id}').getRowData(ids[0]);
-  		  if (ids.length == 1 && #{(@single_record_caption ? 'true' : 'false')}) {
+  		  if (ids.length == 1 && #{(options[:single_record_caption] ? 'true' : 'false')}) {
       		hideTable('##{@jqgrid_id}');
-  		    jQuery('##{@jqgrid_id}').setCaption(#{@single_record_caption});
+  		    jQuery('##{@jqgrid_id}').setCaption(#{options[:single_record_caption]});
   		    jQuery('##{@jqgrid_id}').closest('.ui-jqgrid-view').find('.ui-jqgrid-titlebar').addClass('ui-state-highlight');
   		  } else {
-  		    jQuery('##{@jqgrid_id}').setCaption("#{@caption}");
+  		    jQuery('##{@jqgrid_id}').setCaption("#{options[:caption]}");
   		    jQuery('##{@jqgrid_id}').closest('.ui-jqgrid-view').find('.ui-jqgrid-titlebar').removeClass('ui-state-highlight');
     		  openTable('##{@jqgrid_id}');
   		  }
   		} else {
-		    jQuery('##{@jqgrid_id}').setCaption("#{@caption}");
+		    jQuery('##{@jqgrid_id}').setCaption("#{options[:caption]}");
 		    jQuery('##{@jqgrid_id}').closest('.ui-jqgrid-view').find('.ui-jqgrid-titlebar').removeClass('ui-state-highlight');
     		hideTable('##{@jqgrid_id}');
   		}
@@ -170,18 +169,17 @@ module JqgridWidget::JqgridWidgetHelper
   # It will still send the rowClick event, but it won't send the children into the loading state or
   # close and reopen the edit panel.
   # If you want to handle this event, override select_record in the widget (which is what handle_select calls).
-  def wire_jqgrid_rowbeforeselect
-    puts "wire_jqgrid_rowbeforeselect"
+  def wire_jqgrid_rowbeforeselect(options)
     js_middle = <<-JS
     jQuery.getScript("#{url_for(address_to_event({:type => :rowClick, :escape => false}))}&id="+ids);
     JS
-    if (@row_action == 'panel' || @row_action == 'title_panel')
+    if (options[:row_action] == 'panel' || options[:row_action] == 'title_panel')
       js_middle += <<-JS
       if(ids != jQuery('##{@jqgrid_id}').getGridParam('selrow')){
         #{wire_jqgrid_rowselect_set_children_loading}
         closeEditPanel('##{@jqgrid_id}');
       }
-      #{wire_jqgrid_rowselect_open_panel(:edit)}
+      #{wire_jqgrid_rowselect_open_panel(options, :edit)}
       return true;
       JS
     end
@@ -198,10 +196,9 @@ module JqgridWidget::JqgridWidgetHelper
   # What this does is actually triggers a cellClick event on the column 'row', so the cellClick handler
   # is responsible for determining what to send back as the contents of the panel.
   # I've stashed url_for(address_to_event({:type => :cellClick, :escape => false}, :data)) in jqgrid.data.
-  def wire_jqgrid_rowselect_open_panel(mode = :edit)
-    puts "wire_jqgrid_rowselect_open_panel"
+  def wire_jqgrid_rowselect_open_panel(options, mode = :edit)
     ids = (mode == :edit) ? 'ids' : "'0'"
-    panel_type = (mode == :edit) ? @row_action : 'title_panel'
+    panel_type = (mode == :edit) ? options[:row_action] : 'title_panel'
     <<-JS
       clickAction(#{ids},'row','##{@jqgrid_id}',jQuery('##{@jqgrid_id}').data('cell_click_url'),['#{panel_type}']);
     JS
@@ -209,9 +206,9 @@ module JqgridWidget::JqgridWidgetHelper
   
   # When a new selection is made, we need to notify the children, who will need to reload in sympathy.
   def wire_jqgrid_rowselect_set_children_loading
-    puts "wire_jqgrid_rowselect_set_children_loading"
     children_loading = ''
-    @descendants_to_reload.each do |child|
+    @cell.descendants_to_reload.each do |child|
+    # @descendants_to_reload.each do |child|
       children_loading += <<-JS
         indicateReq('##{child}');closeEditPanel('##{child}');
       JS
@@ -226,7 +223,6 @@ module JqgridWidget::JqgridWidgetHelper
   # Or, it might do something, like select the record for another widget, or trigger a delete request.
   # The properties in the columns model determine how the click will behave.
   def wire_jqgrid_cellselect
-    puts "wire_jqgrid_cellselect"
     if (@columns.map {|c| (c[:action].size > 0)}).include?(true)
       row_actions = @columns.map {|c| "'#{c[:action]}'"}
       url = url_for(address_to_event({:type => :cellClick, :escape => false}, :data))
@@ -242,7 +238,6 @@ module JqgridWidget::JqgridWidgetHelper
   
   # This puts in the filter placeholder
   def html_filters(table = @jqgrid_id)
-    puts "html_filters"
     <<-HTML
 		<div id="#{table}_filters" class="scroll" style="text-align:center;"></div>
 		HTML
@@ -250,7 +245,6 @@ module JqgridWidget::JqgridWidgetHelper
   
   # This wires up the filters
   def wire_filters(table = @jqgrid_id)
-    puts "wire_filters"
     filter_partial = url_for(address_to_event({:state => '_filter_display', :escape => false}, :data))
     subfilter_open = url_for(address_to_event({:state => '_set_filter', :escape => false}))
     filter_counts = url_for(address_to_event({:state => '_filter_counts', :escape => false}, :data))
@@ -278,7 +272,6 @@ module JqgridWidget::JqgridWidgetHelper
   
   # Provide the HTML for a live search field
   def html_live_search_to_wire(field, prompt = 'Search', table = @jqgrid_id)
-    puts "html_live_search_to_wire"
     submit_search_url = url_for(address_to_event({:state => '_send_recordset', :escape => false}))
     <<-HTML
     <form id="#{table}_#{field}_search_form" action="#">
@@ -310,15 +303,13 @@ module JqgridWidget::JqgridWidgetHelper
   # end
   
   def cancel_button(text = 'Cancel')
-    puts "cancel_button"
     submit_tag "Cancel", :onClick => 'closeEditPanel(this);return false;'
   end
 
   def selector_display(selector_id)
-    puts "selector_display"
     if selector = @selectors[selector_id]
       field, custom = selector
-      resource = param(:resource)
+      resource = @cell.resource
       display_value = self.send(custom, @record)
       <<-HTML
       <span id='display_#{resource}_#{field}'>#{display_value}</span>
@@ -328,26 +319,4 @@ module JqgridWidget::JqgridWidgetHelper
     end
   end
   
-  # Utility function
-  # TODO: I worry a bit about potential name conflicts with these, I may want to rename make_js
-  
-  # Turn Ruby datatypes into emittable Javascript
-  # Cf. array_or_string_to_javascript, is there an official way to do this already built in?
-  # I couldn't get case/when to work here for some reason
-  def make_js(thing)
-    puts "make_js"
-    (thing.class == Hash) ? '{' + (thing.map{|k,v| k.to_s + ':' + make_js(v)}).join(',') + '}' :
-      (thing.class == Array ? '[' + (thing.map{|v| make_js(v)}).join(',') + ']' :
-        (thing.class == String ? "'#{thing}'" : thing.to_s
-        )
-      )
-  end
-
-  # http://errtheblog.com/posts/11-block-to-partial
-  def jqgrid_widget_block_to_partial(partial_name, options = {}, &block)
-    puts "jqgrid_widget_block_to_partial"
-    options.merge!(:body => capture(&block))
-    concat(render(:partial => partial_name, :locals => options))
-  end
-
 end

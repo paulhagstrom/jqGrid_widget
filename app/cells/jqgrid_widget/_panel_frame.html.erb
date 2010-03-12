@@ -1,3 +1,7 @@
+<%
+	# This is frame around the edit panel (generally called from _panel_html.erb)
+	# It puts the contents of the edit panel within a form that has the proper targeting
+%>
 <div class="jqgw_edit_panel">
 	<%= form_to_event :state => :_edit_panel_submit %>
 		<%= body %>

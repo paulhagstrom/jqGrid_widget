@@ -1,7 +1,7 @@
 # TODO: One bug that remains is that the add button does not necessarily clear out the record.
 # If something is selected, you wind up just editing that thing and not adding something.
 class JqgridWidgetCell < Apotomo::StatefulWidget
-  # JqgridWidgetCell is the heart of the jQGrid widget, an extension of Apatomo's StatefulWidget
+  # JqgridWidgetCell is the heart of the jQGrid widget, an extension of Apotomo's StatefulWidget
   # TODO: Some documentation here.
   
   # In order to be able to do urlencoding, I bring in the Javascript helpers here.
@@ -9,9 +9,6 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   include ActionView::Helpers::JavaScriptHelper 
   # Bring in address_to_event, since I use it here (though I might like to put it somewhere else)
   include Apotomo::ViewHelper
-  # Bring in a couple of things from jRails.  Probably it would be better to simply attach jRails in full,
-  # but for the moment there are only a couple of things that are needed for this to operate in jQuery alone.
-  require 'jquery_apotomo_helper_methods'
   
   helper :all
   # Make some of the methods defined here available to the view as well
@@ -21,29 +18,17 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # Make the JqgridWidgetHelper methods available to the view; these appear not to be noticed by helper :all
   helper JqgridWidget::JqgridWidgetHelper
   
-  attr_reader :record
-  
-  # Options set upon creation.
-  
-  # attr_reader :resource
-  # attr_reader :resource_model
-  attr_reader :is_top_widget
-  attr_reader :jqgrid_id
-  
+  attr_reader :record  
+  attr_reader :jqgrid_id  # desendants_to_reload asks for this from children
+
+  # SETUP
+  # Note: You might think that it would be sensible to put various things into an initialize method.
+  # However, I found that initialize is called quite a lot, for some reason.  _setup is called once at
+  # the beginning, so that seems to be the best place to do the real initialization.  See for yourself, if you'd like:
   # def initialize(*args)
   #   super(*args)
-  # 
-  #   # resource and jqgrid_id are required, but will be handled by jqg_widget
-  #   # @resource = @opts[:resource]
-  #   @jqgrid_id = @opts[:jqgrid_id]
-  #   puts "Here's jqgrid_id: " + @jqgrid_id.inspect
-  #   # @resource_model = Object.const_get @opts[:resource].classify
-  #   # resource was required, so there is probably no need to guess here.
-  #   # @resource = @opts[:resource] || self.name.to_s.camelize.classify
-  #   @is_top_widget = @opts[:top_widget] || 'no'
+  #   puts "Hello from initialize: " + self.name.to_s
   # end
-  
-  # SETUP
   
   # Assume all documentation-like comments may be out of date.
   # The _setup state is the start state. This will render the partial app/cells/{cell}/_setup.html.erb.
@@ -73,54 +58,47 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   #     col.add_column('profiles', :width => 175, :custom => :custom_profiles)
   #   end
   #   @children_to_hide = ['person_student_degrees_list', 'person_employee_sections_list']
-  #   nil
+  #   render
   # end
   # TODO: Perhaps later I may want to be able to make the default filter not be the first one?
   def _setup
+    puts "Hello from setup: " + self.name.to_s
     @jqgrid_id = @opts[:jqgrid_id]
-    puts "Here's jqgrid_id (_setup): " + @jqgrid_id.inspect
-    # @resource_model = Object.const_get @opts[:resource].classify
-    # resource was required, so there is probably no need to guess here.
-    # @resource = @opts[:resource] || self.name.to_s.camelize.classify
-    @is_top_widget = @opts[:top_widget] || 'no'
+    @is_top_widget = @opts[:top_widget] || false
+    # jqgrid_options can include:
+    # :caption => printable plural form of resource (default 'Records')
+    # :pager
+    # :pager_id
+    # :height
+    # :collapsed
+    # :url
+    # :initial_sort
+    # :add_button (default false)
+    # :collapse_if_empty => true (default false)
+    # :single_record_caption => <js> (default false) 
+    #  This is a small Javascript snipped with 'row' available.  E.g.,
+    #  :single_record_caption => "'Degree track: ' + row.name"
+    # :row_action (default title_panel) determines where the edit panel appears. panel for under row.
+    # :row_object (default _panel) is the partial to render when a row is clicked
+    @jqgrid_options = {
+      :row_action => 'title_panel',
+      :row_object => '_panel',
+      :caption => resource.pluralize.humanize #'Records'
+    }
 
-    # Rails.logger.debug(params.inspect)
-    # @caption = opts(:resource).pluralize.humanize #'Records'
-    @caption = resource.pluralize.humanize #'Records'
-    @collapse_if_empty = false
-    @single_record_caption = false
-    # @single_record_caption is a small Javascript snippet, can make use of 'row' variable.
-    # for example: @single_record_caption = "'Degree track: ' + row.name"
-    @find_include = nil
+    # The default filter is 'all'.
     @filters = [['all', {:name => 'All'}]]
+        
+    @record = scoped_model.new
     
     @columns  = []
-    @row_action = 'title_panel'
-    @row_object = '_panel'
-    
-    # Make settings available to the helper.
-    # Several of these have been derived from instance methods, because I need them to be available
-    # before the widget hits the _init state.
-    # TODO: Reduce the number of these to the bare minimum, once I'm sure what I need.
-    # TODO: Or not, perhaps increasing them would be actually be better, for anything that need not be frozen.
-    # @jqgrid_id = jqgrid_dom_id
-    @descendants_to_reload = descendants_to_reload
-    @select_on_load = select_on_load
-    # @prefix = @prefix
-    # @is_top_widget = @top_widget
-    
-    @record = scoped_model.new
     
     yield self if block_given?
     
     @sortable_columns = (@columns.map {|c| c[:sortable] ? c[:index] : nil}).compact
-    puts "sortable columns: " + @sortable_columns.inspect
     @default_sidx = (@columns.map {|c| c[:sortable] == 'default' ? c[:index] : nil}).compact.first
-    puts "default sidx: " + @default_sidx.inspect
-    # render
-    # render :nothing => true
   end
- 
+    
   # To load a recordset for the table in this widget, a find call is passed to the scoped_model.
   # If this is a top widget, it is appropriate to leave it as resource_model.  If this is a
   # child widget, this can be something like parent.records.contacts (or, you have defined a named scope,
@@ -310,9 +288,9 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   def act_on_cell_click(col)
     emit = ''
     if col == 'row'
-      case @row_action
+      case @jqgrid_options[:row_action]
       when 'title_panel', 'panel'
-        emit = render :view => @row_object
+        emit = render :view => @jqgrid_options[:row_object]
       end
     else
       puts @columns.inspect
@@ -413,7 +391,6 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
           d += c.descendants_to_reload
         end
         d += [c.jqgrid_id]
-        # d += [c.jqgrid_dom_id]
       end
     end
     return d
@@ -426,7 +403,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # TODO: ...filter.  Same for conditions.
   # TODO: In the quest to reduce instance variables, note that I need @filters to be modifiable for this to work.
   def eager_load(tables, filter = 'all')
-    @filters.assoc(filter)[1][:include] = [tables]
+    @filters.assoc(filter)[1][:include] = (tables.is_a?(Array) ? tables : [tables])
   end
   
   # add_column is a helper for constructing the table with _setup.
@@ -509,8 +486,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     # TODO: This also doesn't work when the exact match is off the page.  E.g., searching for TV show "er".
     selection_survived = (@record && records.include?(@record))
     unless selection_survived
-      if @select_on_load
-        if @select_on_load == 'unique'
+      if select_on_load
+        if select_on_load == 'unique'
           if records.size > 1
             if @livesearch
               records.each do |r|

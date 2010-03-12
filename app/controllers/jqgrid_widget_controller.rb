@@ -94,7 +94,8 @@ class JqgridWidgetController < ApplicationController
   # A relatively non-magical version of jqg_widget(resource, :top_widget => 'yes', ...).  Everything else
   # is as above for jqg_widget
   def jqg_top_widget(resource, opts = {})
-    return jqg_widget(resource, {:top_widget => 'yes'}.merge(opts))
+    return jqg_widget(resource, {:top_widget => true}.merge(opts))
+    # return jqg_widget(resource, {:top_widget => 'yes'}.merge(opts))
   end
   
   # Add a child widget to a parent widget (and do the necessary event wiring).
