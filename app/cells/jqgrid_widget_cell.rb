@@ -19,7 +19,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   helper JqgridWidget::JqgridWidgetHelper
   
   attr_reader :record  
-  attr_reader :jqgrid_id  # desendants_to_reload asks for this from children
+  attr_reader :jqgrid_id  # descendants_to_reload asks for this from children
 
   # SETUP
   # Note: You might think that it would be sensible to put various things into an initialize method.
@@ -62,7 +62,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # end
   # TODO: Perhaps later I may want to be able to make the default filter not be the first one?
   def _setup
-    puts "Hello from setup: " + self.name.to_s
+    # puts "Hello from setup: " + self.name.to_s
     @jqgrid_id = @opts[:jqgrid_id]
     @is_top_widget = @opts[:top_widget] || false
     # jqgrid_options can include:

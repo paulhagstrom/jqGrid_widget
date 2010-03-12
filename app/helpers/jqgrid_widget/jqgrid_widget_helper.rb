@@ -21,7 +21,7 @@ module JqgridWidget::JqgridWidgetHelper
   def html_table_to_wire
     # puts "Hello from html_table_to_wire: " + @cell.name.to_s
     <<-HTML
-		<table id="#{@jqgrid_id}" class="scroll" cellpadding="0" cellspacing="0"></table>
+		<table id="#{@jqgrid_id}" class="scroll layout_table" cellpadding="0" cellspacing="0"></table>
 		<div id="#{@jqgrid_id}_pager" class="scroll" style="text-align:center;"></div>
 		HTML
   end

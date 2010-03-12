@@ -1,10 +1,15 @@
 JQGrid widget
 A widget designed for Apotomo using jQuery and the jQGrid plugin
 
-To install:
+The usage information is out of date.  See the jqgrid_widget_demo for usage examples.
+
+Installation may someday be done with the Rails plugin architecture, but for now, it's all direct.  I use submodules and symbolic links, and it goes like this:
 
 cd rails_app
-git submodule add gitetc. vendor/plugins/jqgrid_widget
+git submodule add git://github.com/aaronchi/jrails.git vendor/plugins/jrails
+git submodule add git://github.com/apotonick/cells.git vendor/plugins/cells
+git submodule add git://github.com/apotonick/apotomo.git vendor/plugins/apotomo
+git submodule add git://github.com/paulhagstrom/jqGrid_widget.git vendor/plugins/jqgrid_widget
 get submodule init
 get submodule update
 cd public/images
@@ -12,13 +17,41 @@ ln -s vendor/plugins/jqgrid_widget/public/images/indicator.white.gif
 ln -s vendor/plugins/jqgrid_widget/public/javascripts/jqgrid_widget.js
 ln -s vendor/plugins/jqgrid_widget/public/stylesheets/jqgrid_widget.css
 
-I think that's not actually sufficient.  I think you also need to add as submodules:
-Apotomo
-Cells
-jqGrid
-Instructions pending.
+As can be deduced from above, this requires the following things:
 
-Usage:
+jqGrid_widget
+git://github.com/paulhagstrom/jqGrid_widget.git
+Added as a submodule, git will update
+
+apotomo
+git://github.com/apotonick/apotomo.git
+Added as a submodule, git will update
+
+cells
+git://github.com/apotonick/cells.git
+Added as a submodule, git will update
+
+jQuery
+This can be downloaded from jquery.com.  As I write this, it's at 1.4.2.  Put updates in the public/javascripts folder.  There is a symbolic link (jquery.js) to the current version, which needs to be redirected when there is an update.  I have opted to point the symbolic link at the version that comes with jQuery UI, however.
+
+jQuery UI
+This also has to be downloaded, from jqueryui.com.  As I write this, it's at 1.8rc3.  I have made no attempt to minimize the components, maybe sometime I will take an inventory.  I just downloaded the whole thing.  Redmond theme.  I don't know of a github repository.
+Installed into vendor/plugins, with symbolic links.  There is a symbolic link (jquery-ui) to the current version, which needs to be redirected when there's an update.
+The theme setup seems less good than before, everything seems more integrated, harder to download just the theme files.  For now, the symbolic link in public/stylesheets will force redmond.
+
+jqGrid
+git://github.com/tonytomov/jqGrid.git
+The git source is plugged in with a loader, which makes it easier to keep up to date, but for production, it is probably better to keep it up to date by hand by building it here
+http://www.trirand.com/blog/
+As I write this, 3.6.4 is available, and I have built it as jquery.jqGrid.min.js.  This does not point into the repository, and will not be updated by git updates, it needs to be fixed by hand.  There is an alias jqGrid in vendor/plugins that points to the current jqGrid directory.
+
+jrails
+git://github.com/aaronchi/jrails.git
+I decided it's easier to just go ahead and use this.
+
+
+Usage: QUITE SERIOUSLY OUT OF DATE
+
 For the controller, inherit from JqgridWidgetController, set the layout, and have #index define the widget tree using #jqgrid_widget.  Then render the widget (and its children) into an instance variable to send along to the view.
 
 class MainController < JqgridWidgetController
