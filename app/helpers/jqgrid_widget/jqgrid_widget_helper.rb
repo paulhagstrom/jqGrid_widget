@@ -129,7 +129,7 @@ module JqgridWidget::JqgridWidgetHelper
     return <<-JS
         .navButtonAdd('##{options[:pager_id]}',{caption:'',title:'Add new record',buttonicon:'ui-icon-plus',
         	onClickButton:function(){
-            #{wire_jqgrid_rowselect_open_panel(:add)}
+            #{wire_jqgrid_rowselect_open_panel(options, :add)}
           } 
         });
     JS
