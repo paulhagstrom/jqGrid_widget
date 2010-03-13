@@ -2,6 +2,9 @@ module JqgridWidget::JqgridWidgetHelper
   include JqgridWidgetUtilities
   
   # JqgridWidgetHelper defines a few things to use in the views to get the jqgrid_widgets in there.
+  #
+  # This requires jqGrid 3.6 or later, as it uses the "new API"
+  #
   # Minimally, you need to call html_table_to_wire in the place where you want the jqgrid to be,
   # and then call wire_jqgrid to insert the Javascript that will connect the jqgrid to it.
   # Those are the main two methods here for use from the outside, but there are a lot of methods
@@ -49,54 +52,121 @@ module JqgridWidget::JqgridWidgetHelper
   # :add_button => something other than false if we want to add an add button
   # :row_action => either panel (edit panel opens under row) or title_panel (edit panel opens under title)
   # TODO: Add some more configuration here, make sure the documentation is accurate.
+  # I decided to try to put all of the options in the default array in order to make this a bit more future-proof.
   def wire_jqgrid(passed_options = {})
-    options = passed_options.merge(@jqgrid_options)
-    # Fill in all of the overall defaults if not set either directly or by the widget
-    options[:pager] ||= {}
-    options[:pager_id] ||= @jqgrid_id + '_pager'
-    options[:height] ||= 200
-    options[:collapsed] ||= false
-    options[:url] ||= url_for(address_to_event({:state => '_send_recordset', :escape => false}))
-    options[:caption] ||= 'Records'
-    options[:initial_sort] ||= @columns[0][:index]
-    options[:add_button] ||= false
-    options[:del_button] ||= false
-    options[:row_action] ||= 'title_panel'
-    # options[:add_button] ||= (options[:add_button] != false)
+    # Fallback defaults
+    options = {
+      :viewrecords => true,
+      :scrollrows => true,
+      :sortorder => 'asc',
+      :viewsortable => true,
+      :loadui => 'disable',
+      :height => 200,
+      :collapsed => false,
+      :caption => 'Records',
+      :altRows => true,
+      # :toolbar => [true, 'top'],
+      # :loadonce => true,
+      
+      # If set, :pager should have {:rows_options => , :rows => }
+      # These correspond to jqGrid's rowList and rowNum
+      # :rows_options is an string representing an array of options for how many records to display
+      # :rows is the number of rows to view in the grid
+      # If no pager is set, rows is set to "all" (-1).
+      :pager => {},
+      :pager_id => @jqgrid_id + '_pager',
+      :url => url_for(address_to_event({:state => '_send_recordset', :escape => false})),
+      :initial_sort => @columns[0][:index],
+      :add_button => false,
+      :del_button => false,
+      :row_action => 'title_panel'
+    }.merge(@jqgrid_options).merge(passed_options)
+    # Keys in not_in_grid_definition will not be inserted into the main grid
+    # (They are handled separately)
+    not_in_grid_definition = [:url, :pager, :pager_id, :add_button, :del_button, :row_action]
+    # Keys in renamed_options have different names in jqGrid than in jqGrid_widget
+    # (Whether or not that was a good idea, I'm handling it now.)
+    renamed_options = {
+      :initial_sort => :sortname,
+      :collapsed => :hiddengrid,
+    }
     
-    empty_table = @is_top_widget ? "jQuery('##{@jqgrid_id}');" : js_push_json_to_cache(empty_json)
-    # empty_table = (@is_top_widget == 'yes') ? "jQuery('##{@jqgrid_id}');" : js_push_json_to_cache(empty_json)
-    javascript_tag <<-JS
-    #{empty_table}
-    jQuery("##{@jqgrid_id}").jqGrid({
+    # What is the point of the jQuery() call there?
+    # empty_table = @is_top_widget ? "jQuery('##{@jqgrid_id}');" : js_push_json_to_cache(empty_json)
+    # js_emit = @is_top_widget ? "jQuery('##{@jqgrid_id}');" : js_push_json_to_cache(empty_json)
+    js_emit = @is_top_widget ? '' : js_push_json_to_cache(empty_json)
+    
+    # This does not emit particularly pretty Javascript. Maybe clean this up someday.
+    js_emit += <<-JS
+    jQuery('##{@jqgrid_id}').jqGrid({
       datatype: function(pdata) { retrieveJSON('##{@jqgrid_id}','#{options[:url]}',pdata); },
-      viewrecords: true,
-      scrollrows: true,
-      sortorder: "asc",
-      viewsortable: true,
-      loadui: 'disable',
-      //toolbar: [true,'top'],
-      //loadonce: true,
-      height: #{options[:height]},
       colModel:[#{wire_jqgrid_columns}],
       pager: jQuery('##{options[:pager_id]}'),
-      sortname: '#{options[:initial_sort]}',
-      hiddengrid: #{options[:collapsed] ? 'true' : 'false'},
       #{wire_jqgrid_pager(options)}
       #{wire_jqgrid_cellselect}
       #{wire_jqgrid_rowbeforeselect(options)}
       #{wire_jqgrid_load_complete(options)}
-      caption: "#{options[:caption]}"
-    }).navGrid('##{options[:pager_id]}', {edit:false,add:false,del:#{wire_jqgrid_del_button(options)},search:false,refresh:false})
-    #{wire_jqgrid_add_button(options)}
-    ;
-    // make the whole titlebar expland and collapse the table
+    JS
+    (options.reject {|k,v| not_in_grid_definition.include?(k)}).each do |k,v|
+      js_emit += (renamed_options.include?(k) ? renamed_options[k].to_s : k.to_s) + ': ' + jqgrid_make_js(v) + ', '
+    end
+    js_emit += <<-JS
+    });
+    JS
+    js_emit += wire_jqgrid_nav(options)
+    js_emit += wire_jqgrid_add_button(options) if options[:add_button]
+    # Make the whole titlebar expand and collapse the table
+    # Replace 'loading...' with a spinner
+    # Store the callback url for a cell click so that I can use it later to regenerate the table
+    js_emit += <<-JS
     activateTitleBar('##{@jqgrid_id}');
-    // replace "Loading..." with a spinner
     jQuery('#load_#{@jqgrid_id}').html("<img src='/images/indicator.white.gif'>");
-    // Store the callback url for a cell click so I can use it with regenerating it
     jQuery('##{@jqgrid_id}').data('cell_click_url', '#{url_for(address_to_event({:type => :cellClick, :escape => false}, :data))}');
     JS
+
+    javascript_tag js_emit
+  end
+  
+  # Set the options for the navigation bar
+  # The options for add and edit are intentionally not added this way, but as a custom button
+  def wire_jqgrid_nav(options)
+    if options[:del_button]
+      prmDel = {
+        :url => url_for(address_to_event({:type => :deleteRecord, :escape => false}))
+      }
+    else
+      prmDel = {}
+    end
+    prmEdit = {}
+    prmAdd = {}
+    prmSearch = {}
+    prmView = {}
+    "jQuery('##{@jqgrid_id}').jqGrid('navGrid','##{options[:pager_id]}'," + jqgrid_make_js({
+      :edit => false,
+      :add => false,
+      :del => options[:del_button],
+      :search => false,
+      :refresh => false
+    }) + ',' + 
+    jqgrid_make_js(prmEdit) + ',' + 
+    jqgrid_make_js(prmAdd) + ',' + 
+    jqgrid_make_js(prmDel) + ',' + 
+    jqgrid_make_js(prmSearch) + ',' + 
+    jqgrid_make_js(prmView) + ');'
+  end
+  
+  # Add an add button to the navigation bar
+  def wire_jqgrid_add_button(options)
+    click_function = <<-JS
+    function(){
+      #{wire_jqgrid_rowselect_open_panel(options, :add)}}
+    JS
+    "jQuery('##{@jqgrid_id}').jqGrid('navButtonAdd','##{options[:pager_id]}'," + jqgrid_make_js({
+      :caption => '',
+      :title => 'Add new record',
+      :buttonicon => 'ui-icon-plus',
+      :onClickButton => ActiveSupport::JSON::Variable.new(click_function)
+    }) + ');'
   end
   
   # Return the Javascript columns model (with just the jQGrid options, not the JqgridWidget options)
@@ -119,30 +189,12 @@ module JqgridWidget::JqgridWidgetHelper
       return <<-JS
        	pginput: false,
       	pgbuttons: false,
-      	rowList:[],
+      	rowList: [],
+      	rowNum: -1,
       JS
     end
   end
-
-  # Wire the "delete" button
-  # This is nowhere near working correctly, I was just trying to get started.  Finish this.
-  def wire_jqgrid_del_button(options)
-    return 'false' unless options[:del_button]
-    return 'true,url:"' + url_for(address_to_event({:type => :rowClick, :escape => false})) + '&id=0'
-  end
-  
-  # Add an "add" button
-  def wire_jqgrid_add_button(options)
-    return '' unless options[:add_button]
-    return <<-JS
-        .navButtonAdd('##{options[:pager_id]}',{caption:'',title:'Add new record',buttonicon:'ui-icon-plus',
-        	onClickButton:function(){
-            #{wire_jqgrid_rowselect_open_panel(options, :add)}
-          } 
-        });
-    JS
-  end
-    
+      
   # Prepare the reaction to the load completion.
   def wire_jqgrid_load_complete(options)
     return '' unless (options[:collapse_if_empty] || options[:single_record_caption])

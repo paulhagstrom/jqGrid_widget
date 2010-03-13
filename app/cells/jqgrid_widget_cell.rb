@@ -310,17 +310,17 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   end
 
   # State _delete_record
-  # This is the target of the delete button
-  # This is also not yet worked out.
+  # We arrive here from an event triggered by the delete button
   def _delete_record
-    # @record.destroy
-    # @record = scoped_model.new
-    # inject_js = <<-JS
-    #   closeEditPanel('##{@jqgrid_id}');
-    # JS
-    # inject_js += js_select_id(nil)
-    # trigger(:recordUnselected) # Tell the children that we lost our selection
-    # _child_updated(inject_js) # reload as if we got an updated message from a hypothetical child
+    @record.destroy
+    @record = scoped_model.new
+    js_emit = <<-JS
+      closeEditPanel('##{@jqgrid_id}');
+    JS
+    js_emit += js_select_id(nil)
+    trigger(:recordUpdated)
+    trigger(:recordUnselected)
+    render :js => js_emit + update_recordset_js(false)
   end
   
   # State _send_recordset (returns Javascript, called with jQuery.getScript)

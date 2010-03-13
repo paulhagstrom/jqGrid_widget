@@ -87,6 +87,7 @@ class JqgridWidgetController < ApplicationController
     # Set up the event watchers for the cells and rows
     x.watch(:cellClick, x.name, :_cell_click, x.name)
     x.watch(:rowClick, x.name, :_row_click, x.name)
+    x.watch(:deleteRecord, x.name, :_delete_record, x.name)
     # Return the widget
     return x
   end
