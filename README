@@ -54,6 +54,7 @@ Usage: QUITE SERIOUSLY OUT OF DATE
 
 For the controller, inherit from JqgridWidgetController, set the layout, and have #index define the widget tree using #jqgrid_widget.  Then render the widget (and its children) into an instance variable to send along to the view.
 
+
 class MainController < JqgridWidgetController
 	layout 'applayout'
 
@@ -73,21 +74,16 @@ The widgets themselves live in app/cells, where the cells are defined like Resou
 
 When defining the widget itself, the default behavior will do a lot, so most of what is inherited from JqgridWidgetCell can be left without changes.  A simple example might be like this:
 
-class CollectionsCell < JqgridWidgetCell
-
-  def _setup
-    super do |col|
-      col.add_column('name', :width => 75, :sortable => true)
-      col.add_column('virtual', :width => 30, :label => 'Virt', :formatter => 'checkbox', :sortable => true)
-    end
-    @caption = 'Collections'
-    @rows_per_page = 20
-    nil
+def _setup
+  super do |col|
+    col.add_column('blurb', :width => 250)
   end
-
-  def scoped_model
-    Collection.global_collections
-  end
+  @jqgrid_options.update({
+    :collapse_if_empty => true,
+    :caption => 'Profiles',
+    :height => 50
+  })
+  render
 end
 
 #add_column is defined by JqgridWidgetCell, and helps build the jqGrid.  There are a bunch of options, I'll deal with them later.
