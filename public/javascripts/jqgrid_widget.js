@@ -140,9 +140,9 @@ function openTitlePanel(target, specs, url, reopen) {
 		jqnd = jQuery(nd).addClass('jqgw-form').hide().width(w).
 			css('height','auto').attr('id','incoming_edit_panel').insertBefore(hd);
 		jqnd.load(url, specs, function(data) {
-				if(xpans.length > 0) xpans.animate({height:'hide'}, 'fast', '', function() { jQuery(this).remove();});
 				/* if(xpans.length > 0) xpans.slideUp('normal', function() { jQuery(this).remove();}); */
-				jqnd.animate({height:'show'}, 'fast', '', function() {jqnd.attr('id',pid);});
+				jqnd.animate({height:'show'}, 'slow', '', function() {jqnd.attr('id',pid);});
+				if(xpans.length > 0) xpans.animate({height:'hide'}, 'slow', '', function() { jQuery(this).remove();});
 				/*jqnd.slideDown('normal', function() {
 					jqnd.attr('id', pid);
 				}); */
@@ -172,7 +172,6 @@ function openRowPanel(target, specs, url, do_focus) {
 		var c = r.find('td:eq(' + cellindex + ')');
 		c.addClass('jqgw_cell_focus');
 	}
-	if(xpans.length > 0) xpans.animate({height:'hide'}, 'fast', '', function() { jQuery(this).remove();});
 	// css('position','absolute').css('opacity','0.8') creates an interesting effect (like Mac sheet)
 	var ntb = document.createElement('tbody'),
 	jqntb = jQuery(ntb).addClass('jqgw-form').hide().width(w).
@@ -182,7 +181,7 @@ function openRowPanel(target, specs, url, do_focus) {
 	ntd = document.createElement('td'),
 	jqntd = jQuery(ntd).width(w).attr('colspan', r.attr('cells').length).html('Loading edit panel...').appendTo(jqr).load(url,
 		specs, function(data) { 
-			// if(xpans.length > 0) xpans.animate({height:'hide'}, 'fast', '', function() { jQuery(this).remove();});
+			if(xpans.length > 0) xpans.animate({height:'hide'}, 'fast', '', function() { jQuery(this).remove();});
 			/* if(xpans.length > 0) xpans.slideUp('normal', function() { jQuery(this).remove();}); */
 			jQuery(jqntb).animate({height:'show'}, 'fast');
 			/* jQuery(ntb).slideDown('normal'); */
