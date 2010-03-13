@@ -77,8 +77,8 @@ module JqgridWidget::JqgridWidgetHelper
       :pager_id => @jqgrid_id + '_pager',
       :url => url_for(address_to_event({:state => '_send_recordset', :escape => false})),
       :initial_sort => @columns[0][:index],
-      :add_button => false,
-      :del_button => false,
+      :add_button => true,
+      :del_button => true,
       :row_action => 'title_panel'
     }.merge(@jqgrid_options).merge(passed_options)
     # Keys in not_in_grid_definition will not be inserted into the main grid
