@@ -126,7 +126,7 @@ function ensureTitlePanel(target,url) {
 // see clickAction and clickSpecsData for target and specs
 // if reopen is false, then it will do nothing if one is already open.
 // if reopen is true, it'll destroy an existing panel and replace it with a new one.
-// TODO: It would be nicer if the slideUp and slideDown went at the same time.
+// Note: newer jQuery slideDown does not work properly afaict, so I animate the height.
 function openTitlePanel(target, specs, url, reopen) {
 	var id = specs['table'],
 	t = jQuery('#' + id),
@@ -140,10 +140,12 @@ function openTitlePanel(target, specs, url, reopen) {
 		jqnd = jQuery(nd).addClass('jqgw-form').hide().width(w).
 			css('height','auto').attr('id','incoming_edit_panel').insertBefore(hd);
 		jqnd.load(url, specs, function(data) {
-				if(xpans.length > 0) xpans.slideUp('normal', function() { jQuery(this).remove();});
-				jqnd.slideDown('normal', function() {
+				if(xpans.length > 0) xpans.animate({height:'hide'}, 'fast', '', function() { jQuery(this).remove();});
+				/* if(xpans.length > 0) xpans.slideUp('normal', function() { jQuery(this).remove();}); */
+				jqnd.animate({height:'show'}, 'fast', '', function() {jqnd.attr('id',pid);});
+				/*jqnd.slideDown('normal', function() {
 					jqnd.attr('id', pid);
-				});
+				}); */
 			});		
 	}
 }
@@ -151,6 +153,7 @@ function openTitlePanel(target, specs, url, reopen) {
 // opens an edit panel under the selected row
 // see clickAction and clickSpecsData for target and specs
 // if do_focus is true then it will focus the selected cell and unfocus everything else (only for cell clicks)
+// Note: newer jQuery slideDown does not work properly afaict, so I animate the height.
 // TODO: It would be nicer if the slideUp and slideDown went at the same time.
 function openRowPanel(target, specs, url, do_focus) {
 	var id = specs['table'],
@@ -161,7 +164,7 @@ function openRowPanel(target, specs, url, do_focus) {
 	xpans = v.find('.jqgw-form'),
 	r = t.find('#' + rowid),
 	w = t.css('width'),
-	panel_id = id + '_panel' + rowid + '_' + cellindex;
+	pid = id + '_panel' + rowid + '_' + cellindex;
 	// unfocus anything already focused, then focus the cell that was clicked on
 	// It might be better to use .ui-state-focus, but it wasn't very visible
 	if (do_focus) {
@@ -169,24 +172,32 @@ function openRowPanel(target, specs, url, do_focus) {
 		var c = r.find('td:eq(' + cellindex + ')');
 		c.addClass('jqgw_cell_focus');
 	}
+	if(xpans.length > 0) xpans.animate({height:'hide'}, 'fast', '', function() { jQuery(this).remove();});
+	// css('position','absolute').css('opacity','0.8') creates an interesting effect (like Mac sheet)
 	var ntb = document.createElement('tbody'),
 	jqntb = jQuery(ntb).addClass('jqgw-form').hide().width(w).
-		css('height','auto').attr('id','tbody_'+pid).insertAfter(r),
+		css('height','auto').attr('id','tbody_'+pid).insertBefore(r),
 	nr = document.createElement('tr'),
 	jqr = jQuery(nr).width(w).appendTo(jqntb),
 	ntd = document.createElement('td'),
 	jqntd = jQuery(ntd).width(w).attr('colspan', r.attr('cells').length).html('Loading edit panel...').appendTo(jqr).load(url,
 		specs, function(data) { 
-			if(xpans.length > 0) xpans.slideUp('normal', function() { jQuery(this).remove();});
-			jQuery(ntb).slideDown('normal');
+			// if(xpans.length > 0) xpans.animate({height:'hide'}, 'fast', '', function() { jQuery(this).remove();});
+			/* if(xpans.length > 0) xpans.slideUp('normal', function() { jQuery(this).remove();}); */
+			jQuery(jqntb).animate({height:'show'}, 'fast');
+			/* jQuery(ntb).slideDown('normal'); */
 		});
 }
 
 // This closes an edit panel (in response to submit or cancel)
+// Note: newer jQuery slideUp does not work properly afaict, so I animate the height.
 function closeEditPanel(table) {
-	jQuery(table).closest('.ui-jqgrid-view').find('.jqgw-form').slideUp('normal', function () {
+	jQuery(table).closest('.ui-jqgrid-view').find('.jqgw-form').animate({height:'hide'}, 'fast', function () {
 		jQuery(this).remove();
 	});
+/*	jQuery(table).closest('.ui-jqgrid-view').find('.jqgw-form').slideUp('normal', function () {
+		jQuery(this).remove();
+	}); */
 }
 
 // This supports the live search functionality

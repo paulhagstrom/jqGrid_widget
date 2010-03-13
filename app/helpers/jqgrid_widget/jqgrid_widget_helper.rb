@@ -64,7 +64,7 @@ module JqgridWidget::JqgridWidgetHelper
       :height => 200,
       :collapsed => false,
       :caption => 'Records',
-      :altRows => true,
+      :altRows => false,
       # :toolbar => [true, 'top'],
       # :loadonce => true,
       
