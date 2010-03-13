@@ -153,7 +153,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # defined off of that (and transition_map is what Apotomo itself consults).
   # TODO: Once this is all better defined, I should tighten this up probably, though it works as-is.
   def transitions_all
-    [:_cell_click, :_edit_panel_submit, :_row_click, :_child_choice,
+    [:_cell_click, :_edit_panel_submit, :_row_click, :_child_choice, :_delete_record,
       :_child_updated, :_send_recordset, :_clear_recordset, :_set_filter,
       :_filter_display, :_filter_counts, :_setup, :_parent_selection, :_parent_unselection]
   end
@@ -165,7 +165,8 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
       :_clear_recordset => ([:_clear_recordset] + transitions_all).uniq,
       :_cell_click => ([:_cell_click] + transitions_all).uniq,
       :_row_click => ([:_row_click] + transitions_all).uniq,
-      :_edit_panel_submit => ([:_edit_panel] + transitions_all).uniq,
+      :_edit_panel_submit => ([:_edit_panel_submit] + transitions_all).uniq,
+      :_delete_record => ([:_delete_record] + transitions_all).uniq,
       :_child_updated => ([:_child_updated] + transitions_all).uniq,
       :_set_filter => ([:_set_filter] + transitions_all).uniq,
       :_filter_display => ([:_filter_display] + transitions_all).uniq,
@@ -317,6 +318,19 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     inject_js = <<-JS
       closeEditPanel('##{@jqgrid_id}');
     JS
+    _child_updated(inject_js) # reload as if we got an updated message from a hypothetical child
+  end
+
+  # State _delete_record
+  # This is the target of the delete button
+  def _delete_record
+    @record.destroy
+    @record = scoped_model.new
+    inject_js = <<-JS
+      closeEditPanel('##{@jqgrid_id}');
+    JS
+    inject_js += js_select_id(nil)
+    trigger(:recordUnselected) # Tell the children that we lost our selection
     _child_updated(inject_js) # reload as if we got an updated message from a hypothetical child
   end
   

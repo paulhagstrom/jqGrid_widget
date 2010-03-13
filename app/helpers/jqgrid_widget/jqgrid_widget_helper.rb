@@ -60,6 +60,7 @@ module JqgridWidget::JqgridWidgetHelper
     options[:caption] ||= 'Records'
     options[:initial_sort] ||= @columns[0][:index]
     options[:add_button] ||= false
+    options[:del_button] ||= false
     options[:row_action] ||= 'title_panel'
     # options[:add_button] ||= (options[:add_button] != false)
     
@@ -86,7 +87,7 @@ module JqgridWidget::JqgridWidgetHelper
       #{wire_jqgrid_rowbeforeselect(options)}
       #{wire_jqgrid_load_complete(options)}
       caption: "#{options[:caption]}"
-    }).navGrid('##{options[:pager_id]}', {edit:false,add:false,del:true,search:false,refresh:false})
+    }).navGrid('##{options[:pager_id]}', {edit:false,add:false,del:#{wire_jqgrid_del_button(options)},search:false,refresh:false})
     #{wire_jqgrid_add_button(options)}
     ;
     // make the whole titlebar expland and collapse the table
@@ -121,6 +122,13 @@ module JqgridWidget::JqgridWidgetHelper
       	rowList:[],
       JS
     end
+  end
+
+  # Wire the "delete" button
+  # This is nowhere near working correctly, I was just trying to get started.  Finish this.
+  def wire_jqgrid_del_button(options)
+    return 'false' unless options[:del_button]
+    return 'true,url:"' + url_for(address_to_event({:type => :rowClick, :escape => false})) + '&id=0'
   end
   
   # Add an "add" button
