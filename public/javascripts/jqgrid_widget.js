@@ -141,8 +141,8 @@ function openTitlePanel(target, specs, url, reopen) {
 			css('height','auto').attr('id','incoming_edit_panel').insertBefore(hd);
 		jqnd.load(url, specs, function(data) {
 				/* if(xpans.length > 0) xpans.slideUp('normal', function() { jQuery(this).remove();}); */
-				jqnd.animate({height:'show'}, 'slow', '', function() {jqnd.attr('id',pid);});
-				if(xpans.length > 0) xpans.animate({height:'hide'}, 'slow', '', function() { jQuery(this).remove();});
+				jqnd.animate({height:'show'}, 'fast', '', function() {jqnd.attr('id',pid);});
+				if(xpans.length > 0) xpans.animate({height:'hide'}, 'fast', '', function() { jQuery(this).remove();});
 				/*jqnd.slideDown('normal', function() {
 					jqnd.attr('id', pid);
 				}); */

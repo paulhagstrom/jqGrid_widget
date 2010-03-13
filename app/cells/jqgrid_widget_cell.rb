@@ -267,6 +267,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   def _cell_click
     # I am going to try presuming that the row click handled the creation/location of the @record.
     # @record = scoped_model.find_by_id(param(:id)) || scoped_model.new
+    @record = scoped_model.new unless param(:id).to_i > 0
     col = param(:cell_column)
     if col == 'row'
       case @jqgrid_options[:row_action]
@@ -293,19 +294,29 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # State _edit_panel_submit
   # This is the target of the edit panel's form submission.
   # Updates or adds the record, reselects it, and alerts children and parents.
+  # Dangerously, perhaps, it relies on the stateful nature of these things.  It knows the id from @record.
   def _edit_panel_submit
-    @record.update_attributes(param(@opts[:resource].to_sym))
-    @record.save
-    @record.reload # Be sure we get the id if this was a new record
-    trigger(:recordUpdated)
-    trigger(:recordSelected)
-    # TODO: add some kind of feedback
-    # Perhaps do this in the form of triggering a feedback event that a feedback widget watches.
-    # Alternatively, I can inject js to replace a feedback div's content.
-    js_emit = <<-JS
-      closeEditPanel('##{@jqgrid_id}');
-    JS
+    # @record = scoped_model.find_by_id(param(:id)) || scoped_model.new
+    if @record.new_record?
+      @record = scoped_model.create(param(@opts[:resource].to_sym))
+    else
+      @record.update_attributes(param(@opts[:resource].to_sym))
+    end
+    if @record.save
+      @record.reload # Be sure we get the id if this was a new record
+      trigger(:recordUpdated)
+      # trigger(:recordSelected)
+      # TODO: add some kind of feedback
+      # Perhaps do this in the form of triggering a feedback event that a feedback widget watches.
+      # Alternatively, I can inject js to replace a feedback div's content.
+      js_emit = <<-JS
+        closeEditPanel('##{@jqgrid_id}');
+      JS
+    else
+      puts "Some kind of error saving in edit_panel_submit"
+    end
     # reload as if we got an updated message from a hypothetical child
+    # render :js => update_recordset_js(false) + js_emit
     render :js => js_emit + update_recordset_js(false)
   end
 
@@ -591,19 +602,21 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   end
   
   # This is the actual method that queries the database.
+  # I am not certain about some of this paging stuff.  Maybe.
   def load_records
     get_paging_parameters
     @filter, @subfilter, find_include, find_conditions, @total_records = filter_prepare
     find_order = @sortable_columns.include?(@sidx) ? (@sidx + ' ' + ((@sord == 'desc') ? 'DESC' : 'ASC')) :
       (@default_sidx ? @default_sidx + ' ASC' : nil)
-    if @rows_per_page > 0
-      @total_pages = (@total_records > 0 && @rows_per_page > 0) ? 1 + (@total_records/@rows_per_page).ceil : 0
+    rows_per_page = @rows_per_page
+    if rows_per_page > 0
+      @total_pages = (@total_records > 0 && rows_per_page > 0) ? 1 + (@total_records/rows_per_page).ceil : 0
       @page = @total_pages if @page > @total_pages
       @page = 1 if @page < 1
-      @start_offset = @rows_per_page*@page - @rows_per_page
+      @start_offset = rows_per_page*@page - rows_per_page
     else
       @total_pages = 1
-      @rows_per_page = @total_records
+      rows_per_page = @total_records
       @start_offset = 0
     end
     if @start_offset < 0
@@ -619,7 +632,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     end
     puts "Rows per page #{@rows_per_page}, offset #{@start_offset}, find_order #{find_order}, find_conditions #{find_conditions}, find_include #{find_include}."
     scoped_model.find(:all, :include => find_include, :conditions => find_conditions,
-      :limit => @rows_per_page, :offset => @start_offset, :order => find_order)
+      :limit => rows_per_page, :offset => @start_offset, :order => find_order)
   end
   
   # Prepare the instance variables for load_record, using the filter, returns things
