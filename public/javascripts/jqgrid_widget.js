@@ -77,43 +77,11 @@ function pushJSON(table,json) {
 
 // JqgridWidget functions:
 
-// This opens an edit panel under the row whose row/cell was clicked on.
-// This can be called either by a row click or a cell click
-// When called as a row click, actions should be a singleton array, cellindex 0.
-// When called as a cell click, actions should have one element per column, cellindex is the 0-based column.
-// This breaks down if you have single-column rows; they'll be treated as row clicks.  So?
-// Even for a cell click, the target url to be loaded must remain constant across an entire row;
-// the column will be passed back as a parameter.
-// Actions:
-// 'title_panel' open a panel (probably an edit panel) with the contents of url in the title bar
-// 'panel' open a panel (probably an edit panel) with the contents of the url under the selected row
-// 'event' trigger an event (probably a selection to be transmitted to another widget)
-// title_panel is true if a panel will open in the title bar region, false if it will open under the clicked-on row.
-function clickAction(rowid,cellindex,target,url,actions) {
-	var specs = clickSpecsData(rowid,cellindex,target);
-	if(cellindex == 'row'){
-		action = actions[0];
-	} else {
-		action = actions[cellindex];
-	}
-	switch(action) {
-		case 'event':
-		case 'choice':
-			jQuery.get(url, specs, null, 'script');
-			break;
-		case 'panel':
-			openRowPanel(target, specs, url, (actions.length > 1));
-			break;
-		case 'title_panel':
-			openTitlePanel(target, specs, url, true);
-			break;
-	}
-}
-
 // create the "specs" argument
 function clickSpecsData(rowid,cellindex,target) {
 	var id = jQuery(target).closest('.ui-jqgrid-btable').attr('id');
-	return {'id': rowid, 'table': id, 'cell_column': cellindex, 'authenticity_token': rails_authenticity_token};
+	vid = jQuery(target).closest('.ui-jqgrid-view').attr('id');
+	return {'id': rowid, 'table': id, 'cell_column': cellindex, 'table_view': vid, 'authenticity_token': rails_authenticity_token};
 }
 
 // make sure an edit panel is open in the titlebar area
@@ -127,10 +95,13 @@ function ensureTitlePanel(target,url) {
 // if reopen is false, then it will do nothing if one is already open.
 // if reopen is true, it'll destroy an existing panel and replace it with a new one.
 // Note: newer jQuery slideDown does not work properly afaict, so I animate the height.
-function openTitlePanel(target, specs, url, reopen) {
+//function openTitlePanel(target, specs, url, reopen) {
+function openTitlePanel(specs, url, reopen) {
 	var id = specs['table'],
 	t = jQuery('#' + id),
-	v = jQuery(target).closest('.ui-jqgrid-view'),
+	//v = jQuery(target).closest('.ui-jqgrid-view'),
+	vid = specs['table_view'],
+	v = jQuery('#' + vid),
 	xpans = v.find('.jqgw-form');
 	if(reopen || xpans.length == 0) {
 		nd = document.createElement('div'),
@@ -155,12 +126,15 @@ function openTitlePanel(target, specs, url, reopen) {
 // if do_focus is true then it will focus the selected cell and unfocus everything else (only for cell clicks)
 // Note: newer jQuery slideDown does not work properly afaict, so I animate the height.
 // TODO: It would be nicer if the slideUp and slideDown went at the same time.
-function openRowPanel(target, specs, url, do_focus) {
+// function openRowPanel(target, specs, url, do_focus) {
+function openRowPanel(specs, url, do_focus) {
 	var id = specs['table'],
 	cellindex = specs['cellindex'],
 	rowid = specs['id'],
 	t = jQuery('#' + id),
-	v = jQuery(target).closest('.ui-jqgrid-view'),
+	// v = jQuery(target).closest('.ui-jqgrid-view'),
+	vid = specs['table_view'],
+	v = jQuery('#' + vid),
 	xpans = v.find('.jqgw-form'),
 	r = t.find('#' + rowid),
 	w = t.css('width'),
@@ -173,17 +147,21 @@ function openRowPanel(target, specs, url, do_focus) {
 		c.addClass('jqgw_cell_focus');
 	}
 	// css('position','absolute').css('opacity','0.8') creates an interesting effect (like Mac sheet)
-	var ntb = document.createElement('tbody'),
+	var nr = document.createElement('tr'),
+	jqr = jQuery(nr).width(w).addClass('jqgw-form').hide().css('height','auto').css('position','absolute').css('opacity','0.8').attr('id','tr_'+pid).insertBefore(r),
+	ntd = document.createElement('td');
+/*	var ntb = document.createElement('tbody'),
 	jqntb = jQuery(ntb).addClass('jqgw-form').hide().width(w).
 		css('height','auto').attr('id','tbody_'+pid).insertBefore(r),
 	nr = document.createElement('tr'),
 	jqr = jQuery(nr).width(w).appendTo(jqntb),
-	ntd = document.createElement('td'),
-	jqntd = jQuery(ntd).width(w).attr('colspan', r.attr('cells').length).html('Loading edit panel...').appendTo(jqr).load(url,
+	ntd = document.createElement('td'); */
+	var jqntd = jQuery(ntd).width(w).attr('colspan', r.attr('cells').length).html('Loading edit panel...').appendTo(jqr).load(url,
 		specs, function(data) { 
 			if(xpans.length > 0) xpans.animate({height:'hide'}, 'fast', '', function() { jQuery(this).remove();});
 			/* if(xpans.length > 0) xpans.slideUp('normal', function() { jQuery(this).remove();}); */
-			jQuery(jqntb).animate({height:'show'}, 'fast');
+			/* jQuery(jqntb).animate({height:'show'}, 'fast'); */
+			jQuery(jqr).animate({height:'show'}, 'fast');
 			/* jQuery(ntb).slideDown('normal'); */
 		});
 }

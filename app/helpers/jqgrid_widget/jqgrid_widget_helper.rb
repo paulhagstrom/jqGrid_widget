@@ -96,14 +96,14 @@ module JqgridWidget::JqgridWidgetHelper
     # js_emit = @is_top_widget ? "jQuery('##{@jqgrid_id}');" : js_push_json_to_cache(empty_json)
     js_emit = @is_top_widget ? '' : js_push_json_to_cache(empty_json)
     
-    # This does not emit particularly pretty Javascript. Maybe clean this up someday.
+    # TODO: This does not emit particularly pretty Javascript. Maybe clean this up someday.
     js_emit += <<-JS
     jQuery('##{@jqgrid_id}').jqGrid({
       datatype: function(pdata) { retrieveJSON('##{@jqgrid_id}','#{options[:url]}',pdata); },
       colModel:[#{wire_jqgrid_columns}],
       pager: jQuery('##{options[:pager_id]}'),
       #{wire_jqgrid_pager(options)}
-      #{wire_jqgrid_cellselect}
+      #{wire_jqgrid_cellselect(options)}
       #{wire_jqgrid_rowbeforeselect(options)}
       #{wire_jqgrid_load_complete(options)}
     JS
@@ -118,10 +118,13 @@ module JqgridWidget::JqgridWidgetHelper
     # Make the whole titlebar expand and collapse the table
     # Replace 'loading...' with a spinner
     # Store the callback url for a cell click so that I can use it later to regenerate the table
+    # Same for the url that provides the html for the edit panels
+    # TODO: Someday make this not an event, if possible, would speed things up.
     js_emit += <<-JS
     activateTitleBar('##{@jqgrid_id}');
     jQuery('#load_#{@jqgrid_id}').html("<img src='/images/indicator.white.gif'>");
     jQuery('##{@jqgrid_id}').data('cell_click_url', '#{url_for(address_to_event({:type => :cellClick, :escape => false}, :data))}');
+    jQuery('##{@jqgrid_id}').data('draw_panel_url', '#{url_for(address_to_event({:type => :drawPanel, :escape => false}, :data))}');
     JS
 
     javascript_tag js_emit
@@ -159,7 +162,10 @@ module JqgridWidget::JqgridWidgetHelper
   def wire_jqgrid_add_button(options)
     click_function = <<-JS
     function(){
-      #{wire_jqgrid_rowselect_open_panel(options, :add)}}
+    	var specs = clickSpecsData('0','row','##{@jqgrid_id}'),
+    	url = jQuery('##{@jqgrid_id}').data('cell_click_url');
+			jQuery.get(url, specs, null, 'script');
+    }
     JS
     "jQuery('##{@jqgrid_id}').jqGrid('navButtonAdd','##{options[:pager_id]}'," + jqgrid_make_js({
       :caption => '',
@@ -221,42 +227,46 @@ module JqgridWidget::JqgridWidgetHelper
     JS
   end
 
-  # This generates the beforeSelectRow option for jqgrid, which handles the event of a row being clicked on.
-  # No matter what the row action is, this will trigger a :rowClick event (handle_select in the controller).
-  # If the row action is set to open a panel, it will send the children into a loading state, close
-  # and any open edit panel, and open the panel using the clickAction Javascript function (jqgrid_widget.js).
-  # This is a beforeSelect event because I want to be able to not react fully if the selection hasn't changed.
-  # It will still send the rowClick event, but it won't send the children into the loading state or
-  # close and reopen the edit panel.
-  # If you want to handle this event, override select_record in the widget (which is what handle_select calls).
-  def wire_jqgrid_rowbeforeselect(options)
-    js_middle = <<-JS
-    jQuery.getScript("#{url_for(address_to_event({:type => :rowClick, :escape => false}))}&id="+ids);
-    JS
-    if (options[:row_action] == 'panel' || options[:row_action] == 'title_panel')
-      js_middle += <<-JS
-      if(ids != jQuery('##{@jqgrid_id}').getGridParam('selrow')){
-        #{wire_jqgrid_rowselect_set_children_loading}
-        //closeEditPanel('##{@jqgrid_id}');
-      }
-      #{wire_jqgrid_rowselect_open_panel(options, :edit)}
-      return true;
-      JS
-    end
-    return <<-JS
-    beforeSelectRow: function(ids) {
-      #{js_middle}
+  # Click handling
+  # This handles everything, on the basis of a cell select (used to be split into subcalls). Simpler.
+  # TODO: However, it's much slower, because nothing happens immediately, AJAX needs to be waited for.
+  # It would be nice if I could make the OpenRowPanel or OpenTitlePanel from here.
+  # Or at least provide some kind of loading feedback.
+  def wire_jqgrid_cellselect(options)
+    # cell_actions = jqgrid_make_js(@columns.map {|c| c[:action]})
+    # default_action = jqgrid_make_js(options[:row_action])
+    # url = jqgrid_make_js(url_for(address_to_event({:type => :cellClick, :escape => false}, :data)))
+    <<-JS
+    onCellSelect: function(rowid,cellindex,html,event) {
+    	var specs = clickSpecsData(rowid,cellindex,event.target),
+    	url = jQuery('##{@jqgrid_id}').data('cell_click_url');
+			jQuery.get(url, specs, null, 'script');
     },
     JS
   end
-    
+  
+  # This is a simplified beforeSelectRow handler.
+  # Its only purpose is to send the children into the 'loading...' state if the selection has changed.
+  def wire_jqgrid_rowbeforeselect(options)
+    return <<-JS
+    beforeSelectRow: function(ids) {
+      if(ids != jQuery('##{@jqgrid_id}').getGridParam('selrow')){
+        #{wire_jqgrid_rowselect_set_children_loading}
+      }
+      return true;
+    },
+    JS
+  end
+
+
+  # Thsi should be obsolete
   # Prepare the edit panel arising from row clicks
   # The :edit mode is the normal behavior, the :add mode is used to respond to clicking an add button.
   # For :add mode, it does not make sense to allow a row panel, even if normally there would be one.
   # What this does is actually triggers a cellClick event on the column 'row', so the cellClick handler
   # is responsible for determining what to send back as the contents of the panel.
   # I've stashed url_for(address_to_event({:type => :cellClick, :escape => false}, :data)) in jqgrid.data.
-  def wire_jqgrid_rowselect_open_panel(options, mode = :edit)
+  def ex_wire_jqgrid_rowselect_open_panel(options, mode = :edit)
     ids = (mode == :edit) ? 'ids' : "'0'"
     panel_type = (mode == :edit) ? options[:row_action] : 'title_panel'
     <<-JS
@@ -274,26 +284,6 @@ module JqgridWidget::JqgridWidgetHelper
       JS
     end
     return children_loading
-  end
-  
-  # Set up a handler if a cell is clicked on.
-  # This is used for a couple of different things.
-  # It might be just an alternative means of opening an edit panel
-  # (this allows selecting a row without opening an edit panel)
-  # Or, it might do something, like select the record for another widget, or trigger a delete request.
-  # The properties in the columns model determine how the click will behave.
-  def wire_jqgrid_cellselect
-    if (@columns.map {|c| (c[:action].size > 0)}).include?(true)
-      row_actions = @columns.map {|c| "'#{c[:action]}'"}
-      url = url_for(address_to_event({:type => :cellClick, :escape => false}, :data))
-      <<-JS
-      onCellSelect: function(rowid,cellindex,html,target) {
-        clickAction(rowid,cellindex,target,jQuery('##{@jqgrid_id}').data('cell_click_url'),[#{row_actions.join(',')}]);
-      },
-      JS
-    else
-      ''
-    end
   end
   
   # This puts in the filter placeholder

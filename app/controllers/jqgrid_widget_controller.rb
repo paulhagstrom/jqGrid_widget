@@ -73,20 +73,10 @@ class JqgridWidgetController < ApplicationController
     cell_class = opts[:cell_class] || (resource_alias.pluralize + '_cell').camelize
     jqgrid_id = opts[:jqgrid_id] || (pfx + resource_alias.pluralize + '_list')
     x = widget(cell_class, :_setup, widget_id, opts.merge({:resource => resource, :jqgrid_id => jqgrid_id}))
-    # # Set the defaults if they weren't passed in
-    # resource_alias = opts[:resource_alias] || resource
-    # # cell_class = opts[:cell_class] || Object.const_get((resource_alias.pluralize + '_cell').camelize.classify)
-    # # cell_class = opts[:cell_class] || Object.const_get((resource_alias.pluralize + '_cell').camelize)
-    # cell_class = opts[:cell_class] || (resource_alias.pluralize + '_cell').camelize
-    # # Create the widget
-    # x = widget(cell_class, :_setup, widget_id, :resource => resource, :jqgrid_id => jqgrid_id,
-    #   :prefix => pfx, :top_widget => top_widget)
-    # previous version here became obselete, probably due to cells update
-    # x = cell_class.new(controller, widget_id, :_setup, :resource => resource, :jqgrid_id => jqgrid_id,
-    #   :prefix => pfx, :top_widget => top_widget)
-    # Set up the event watchers for the cells and rows
+    # All widgets watch themselves for cellClick, rowClick, and deleteRecord events
     x.watch(:cellClick, x.name, :_cell_click, x.name)
-    x.watch(:rowClick, x.name, :_row_click, x.name)
+    x.watch(:rowClick, x.name, :_row_click, x.name) # should be obsolete
+    x.watch(:drawPanel, x.name, :_draw_panel, x.name)
     x.watch(:deleteRecord, x.name, :_delete_record, x.name)
     # Return the widget
     return x
@@ -104,14 +94,13 @@ class JqgridWidgetController < ApplicationController
   def embed_widget(parent_cell, child_cell)
     parent_cell << child_cell
     # Parents watch themselves for record selects and unselects, and send children into appropriate states.
-    # Parents also watch children for record updates, and update themselves if one occurs.
-    # TODO: I don't need to watch for both events for things that can never receive a recordAutoChanged.  Is it worth checking?
-    # parent_cell.watch(:recordSelected, child_cell.name, :_send_recordset, parent_cell.name)
-    # parent_cell.watch(:recordUnselected, child_cell.name, :_clear_recordset, parent_cell.name)
     parent_cell.watch(:recordSelected, child_cell.name, :_parent_selection, parent_cell.name)
     parent_cell.watch(:recordUnselected, child_cell.name, :_parent_unselection, parent_cell.name)
+    # Parents also watch children for record updates, and update themselves if one occurs.
     parent_cell.watch(:recordUpdated, parent_cell.name, :_child_updated, child_cell.name)
-    # parent_cell.watch(:recordChosen, parent_cell.name, :_child_choice, child_cell.name)
+    # Children watch themselves for recordChosen events
+    # That's weird no?
+    # Why don't the parents watch the children?
     child_cell.watch(:recordChosen, child_cell.name, :_child_choice, child_cell.name)
   end
     

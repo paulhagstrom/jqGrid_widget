@@ -1,8 +1,9 @@
-# TODO: One bug that remains is that the add button does not necessarily clear out the record.
-# If something is selected, you wind up just editing that thing and not adding something.
 class JqgridWidgetCell < Apotomo::StatefulWidget
+  include JqgridWidgetUtilities
+  include JqgridWidgetCommunication
+  
   # JqgridWidgetCell is the heart of the jQGrid widget, an extension of Apotomo's StatefulWidget
-  # TODO: Some documentation here.
+  # TODO: Some documentation here.  Maybe even with rdoc.
   
   # In order to be able to do urlencoding, I bring in the Javascript helpers here.
   # TODO: I forget where I use this.  Is it really urlencoding?  Do I really still use it?  Check.
@@ -126,11 +127,11 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     false
   end
 
-  # If a child widget is serving as a glorified popup menu, where the selection in the child table
+  # If a child widget is serving as a glorified popup menu, where a choice in the child table
   # determines the value of a field in the parent, then set selector_for for the child table to be
   # the field (of the child) from which the id is drawn.  As a symbol.  Like :thingie_id.
   # Returning nil means that the child is showing something like a one-to-many relation.
-  # TODO: This could potentially be drawn from information about has_many or belongs_to settings in
+  # TODO: This could potentially be guessed from information about has_many or belongs_to settings in
   # the model.  But setting it explicitly is ok for now.
   def selector_for
     nil
@@ -140,30 +141,6 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # field is set to (the currently selected record).
   def selector_field_value
     parent.record[selector_for] rescue nil
-  end
-      
-  # UI definitions.  Can be overridden if desired.
-  
-  # Chosen and not chosen.
-  def chosen_icon
-    '<span class="ui-icon ui-icon-check" />'
-  end
-
-  def not_chosen_icon
-    '<span class="ui-icon ui-icon-circle-arrow-w" />'
-  end
-  
-  # This is the name of the choice mark column, can be overridden if needed.
-  # (The choice mark column is the place where the choice_mark_column_icon, below, goes.
-  # The idea is that this indicates which is currently chosen.  It might be different
-  # from what is actually selected in the table.)
-  def choice_mark_column_name
-    'choice_mark'
-  end
-
-  # UI for the chosen column header, can be overridden
-  def choice_mark_column_icon
-    '<span class="ui-icon ui-icon-link" />'
   end
   
   # STATES
@@ -176,7 +153,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # TODO: Once this is all better defined, I should tighten this up probably, though it works as-is.
   def transitions_all
     [:_cell_click, :_edit_panel_submit, :_row_click, :_child_choice, :_delete_record,
-      :_child_updated, :_send_recordset, :_set_filter,
+      :_child_updated, :_send_recordset, :_set_filter, :_draw_panel,
       :_filter_display, :_filter_counts, :_setup, :_parent_selection, :_parent_unselection]
   end
   
@@ -195,12 +172,14 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
       :_parent_selection => ([:_parent_selection] + transitions_all).uniq,
       :_parent_unselection => ([:_parent_unselection] + transitions_all).uniq,
       :_child_choice => ([:_child_choice] + transitions_all).uniq,
+      :_draw_panel => ([:_draw_panel] + transitions_all).uniq,
     }
   end
   
   # Communications
   
   # State _row_click
+  # Supposed to be obsolete, there should be no more rowClick events.
   # This is triggered by a widget firing an :rowClick event.
   # The row click is intended to handle record selection in a list, only.
   # For actions that occur when a row is clicked on, refer to the :cellClick handler, which also fires.
@@ -208,9 +187,10 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     render :js => select_record_js(param(:id))
   end
   
-  # When a row is clicked, the controller's row selection handler gets the notification and sends it here.
-  # This announces to the children that a record was selected, much as _send_recordsets does.
-  # This returns Javascript suitable for rendering (and depends on render :js => '' to be harmless).
+  # This locates the record passed in by id and stores it in @record (if it wasn't already there)
+  # When found, a recordSelected event is announced (will tell the children)
+  # If not found, a recordUnselected even is announed (will tell the children)
+  # Javascript return will set the selection in the table.
   def select_record_js(id)
     unless @record && @record.id == id #only announce if there was a change.
       if @record = scoped_model.find_by_id(id)
@@ -219,16 +199,16 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
       else
         @record = scoped_model.new
         trigger(:recordUnselected)
+        return js_select_id(nil)
       end
     end
     return ''
   end
     
-  # The parent widget has posted a record selected event.
-  # If this is a subgrid-type child, then send the new recordset based on the selection.
-  # If this is a selector-type child, then set the selection to the linked field.
-  # TODO: Note, this might go badly for widgets with paginators, since it does not at present jump to the right page.
-  # TODO: For the moment, consider this to be only compatible with selector-type children that have no paginator.
+  # The parent widget has posted a recordSelected event.
+  # A standard subgrid will send a new recordset based on the parent's (new) selection.
+  # A selector will set the selection based on the parent's newly selected record.
+  # TODO: Selectors with paginators are a bad idea, because it won't jump to the right page.
   def _parent_selection
     if selector_for
       render :js => select_record_js(selector_field_value) + js_choose_id(selector_field_value)
@@ -237,10 +217,10 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     end
   end
 
-  # The parent widget has posted a record unselected event.
-  # If this is a subgrid-type child, then clear the recordset.
-  # If this is a selector-type child, then clear the selection and resend the recordset.
-  # TODO: The resending of the recordset is generally superfluous except for the initial page load.
+  # The parent widget has posted a recordUnselected event.
+  # A standard subgrid will clear its recordset and reload its grid
+  # A selector will clear its selection and resend the recordset.
+  # TODO: The resending of the recordset for selectors is generally superfluous except for the initial page load.
   # TODO: In the future maybe I could check to see if the recordset is empty and resend only if it is?
   def _parent_unselection
     trigger(:recordUnselected)
@@ -252,45 +232,63 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     end
   end
       
-  # State _child_updated
-  # This is triggered by a child's :recordUpdated event.
-  # This is the handler for :recordUpdated, which a child sends to a parent to request a reload, since
-  # sometimes the child's data might be reflected in the parent table.
+  # A child widget has updated a record (and posted a recordUpdated event)
+  # This causes a reload (in case one of values is reflected in the parent table)
+  # The reload is not re-propagated downward, because the child was aware of the change.
   def _child_updated
     render :js => update_recordset_js(false)
   end
   
-  # State _cell_click
-  # This is triggered by a widget firing an :cellClick event.
-  # You could have it do something else depending on the column by overriding it.
-  # actions 'panel' and 'title_panel' are expecting html, 'choice' is expecting Javascript.
+  # A cellClick event (a cell was clicked on in this widget)
+  # It should receive id (rowid), table (jqgrid id), cell_column (cell index)
+  # TODO: The add function here doesn't make much sense in the context of column panels.
+  # TODO: Are column panels really important?  Or maybe just for viewing?
   def _cell_click
-    # I am going to try presuming that the row click handled the creation/location of the @record.
-    # @record = scoped_model.find_by_id(param(:id)) || scoped_model.new
-    @record = scoped_model.new unless param(:id).to_i > 0
-    col = param(:cell_column)
-    if col == 'row'
-      case @jqgrid_options[:row_action]
+    id = param(:id).to_i
+    js_emit = select_record_js(id)    
+    if id > 0
+      panel_type = nil
+      # Priority goes to actions defined by columns
+      case @columns[param(:cell_column).to_i][:action]
       when 'title_panel', 'panel'
-        render :view => @jqgrid_options[:row_object]
+        panel_type = @columns[param(:cell_column).to_i][:action]
+        panel_object = @columns[col.to_i][:object]
+      when 'choice'
+          js_emit += js_choose_id(@record.id) + parent.update_choice_js(self.name, @record)
       else
-        puts "CELL CLICK FOR ROW, BUT NO ROW ACTION."
-        render :nothing => true
+        case @jqgrid_options[:row_action]
+        when 'title_panel', 'panel'
+          panel_type = @jqgrid_options[:row_action]
+          panel_object = @jqgrid_options[:row_object]
+        when 'choice'
+          js_emit += js_choose_id(@record.id) + parent.update_choice_js(self.name, @record)
+        end
       end
     else
-      # puts @columns.inspect
-      case @columns[col.to_i][:action]
-      when 'title_panel', 'panel'
-        render :view => @columns[col.to_i][:object]
-      when 'choice'
-        render :js => js_choose_id(@record.id) + parent.update_choice_js(self.name, @record)
-      else
-        puts "UNRECOGNIZED CELL CLICK TYPE: " + @columns[col.to_i][:action].to_s
-        render :nothing => true
-      end
+      # Add
+      panel_type = 'title_panel'
+      panel_object = @jqgrid_options[:row_object]
     end
+    if panel_type
+      specs = jqgrid_make_js({:id => param(:id), :table => param(:table), :panel => panel_object,
+        :cell_column => param(:cell_column), :table_view => param(:table_view)})
+    end
+    case panel_type
+    when 'title_panel'
+      js_emit += "openTitlePanel(#{specs}, jQuery('##{@jqgrid_id}').data('draw_panel_url'), true);"
+    when 'panel'
+      js_emit += "openRowPanel(#{specs}, jQuery('##{@jqgrid_id}').data('draw_panel_url'), true);"
+    end
+    render :js => js_emit
   end
-      
+    
+  # This returns the html for an edit panel
+  # It is called by an event, but if I can get this directly, that would be better.  It's kind of slow now.
+  # Also it could use some feedback.
+  def _draw_panel
+    render :view => param(:panel)
+  end
+        
   # State _edit_panel_submit
   # This is the target of the edit panel's form submission.
   # Updates or adds the record, reselects it, and alerts children and parents.
@@ -741,6 +739,29 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     jQuery('##{@jqgrid_id}_#{@filter}_filter_form').addClass('jqgw-filter-open').slideDown('normal');
     JS
   end
-    
+
+  # UI definitions.  Can be overridden if desired.
+  
+  # Chosen and not chosen.
+  def chosen_icon
+    '<span class="ui-icon ui-icon-check" />'
+  end
+
+  def not_chosen_icon
+    '<span class="ui-icon ui-icon-circle-arrow-w" />'
+  end
+  
+  # This is the name of the choice mark column, can be overridden if needed.
+  # (The choice mark column is the place where the choice_mark_column_icon, below, goes.
+  # The idea is that this indicates which is currently chosen.  It might be different
+  # from what is actually selected in the table.)
+  def choice_mark_column_name
+    'choice_mark'
+  end
+
+  # UI for the chosen column header, can be overridden
+  def choice_mark_column_icon
+    '<span class="ui-icon ui-icon-link" />'
+  end    
 end
 
