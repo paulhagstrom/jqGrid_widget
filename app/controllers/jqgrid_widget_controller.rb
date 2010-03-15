@@ -15,14 +15,8 @@ class JqgridWidgetController < ApplicationController
   # require 'jquery_apotomo_helper_methods'
   
   # The index method here is intended to be called via 'super' from the subclass.
-  # This sets a global event handler on row clicks to call the #handle_select method defined later
-  # in this file.
-  # I'm trying to get rid of this global method.  Please work.
-  # It is possible that the super calls can be removed at this point, since clearly they aren't doing anything.
-  # Assuming that this actually works.
+  # Maybe someday it will do something
   def index
-    # respond_to_event :rowClick, :with => :handle_select  
-    # respond_to_event :recordChosen, :with => :handle_choice
   end
   
   protected
@@ -97,9 +91,7 @@ class JqgridWidgetController < ApplicationController
     parent_cell.watch(:recordUnselected, child_cell.name, :_parent_unselection, parent_cell.name)
     # Parents also watch children for record updates, and update themselves if one occurs.
     parent_cell.watch(:recordUpdated, parent_cell.name, :_child_updated, child_cell.name)
-    # Children watch themselves for recordChosen events
-    # That's weird no?
-    # Why don't the parents watch the children?
+    # Children watch themselves for recordChosen events, then send parent into update choice state
     child_cell.watch(:recordChosen, child_cell.name, :_child_choice, child_cell.name)
   end
     

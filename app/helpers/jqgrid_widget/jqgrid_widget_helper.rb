@@ -257,22 +257,6 @@ module JqgridWidget::JqgridWidgetHelper
     },
     JS
   end
-
-
-  # Thsi should be obsolete
-  # Prepare the edit panel arising from row clicks
-  # The :edit mode is the normal behavior, the :add mode is used to respond to clicking an add button.
-  # For :add mode, it does not make sense to allow a row panel, even if normally there would be one.
-  # What this does is actually triggers a cellClick event on the column 'row', so the cellClick handler
-  # is responsible for determining what to send back as the contents of the panel.
-  # I've stashed url_for(address_to_event({:type => :cellClick, :escape => false}, :data)) in jqgrid.data.
-  def ex_wire_jqgrid_rowselect_open_panel(options, mode = :edit)
-    ids = (mode == :edit) ? 'ids' : "'0'"
-    panel_type = (mode == :edit) ? options[:row_action] : 'title_panel'
-    <<-JS
-      clickAction(#{ids},'row','##{@jqgrid_id}',jQuery('##{@jqgrid_id}').data('cell_click_url'),['#{panel_type}']);
-    JS
-  end
   
   # When a new selection is made, we need to notify the children, who will need to reload in sympathy.
   def wire_jqgrid_rowselect_set_children_loading

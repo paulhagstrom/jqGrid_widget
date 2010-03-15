@@ -87,7 +87,7 @@ function clickSpecsData(rowid,cellindex,target) {
 // make sure an edit panel is open in the titlebar area
 // used by the selector click function to open up a new record.
 function ensureTitlePanel(target,url) {
-	openTitlePanel(target,clickSpecsData('0','row',target),url,false);
+	openTitlePanel(clickSpecsData('0','row',target),url,false);
 }
 
 // opens an edit panel in the titlebar area

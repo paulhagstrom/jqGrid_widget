@@ -94,6 +94,9 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     
     @columns  = []
     
+    # This is where the "flash updates" will go.  Should be a span.
+    @feedback_span = 'nav_feedback'
+    
     yield self if block_given?
     
     @sortable_columns = (@columns.map {|c| c[:sortable] ? c[:index] : nil}).compact
@@ -288,12 +291,22 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   def _draw_panel
     render :view => param(:panel)
   end
-        
+  
+  # put some feedback up. No quotation marks allowed.
+  # TODO: Allow quotation marks
+  def js_flash_feedback(message)
+    <<-JS
+    jQuery('##{@feedback_span}').hide().html("#{message}").fadeIn('slow', function()
+        {jQuery(this).fadeOut('slow');});
+    JS
+  end
+  
   # State _edit_panel_submit
   # This is the target of the edit panel's form submission.
   # Updates or adds the record, reselects it, and alerts children and parents.
   # Dangerously, perhaps, it relies on the stateful nature of these things.  It knows the id from @record.
   def _edit_panel_submit
+    js_emit = ''
     # @record = scoped_model.find_by_id(param(:id)) || scoped_model.new
     if @record.new_record?
       @record = scoped_model.create(param(@opts[:resource].to_sym))
@@ -304,14 +317,15 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
       @record.reload # Be sure we get the id if this was a new record
       trigger(:recordUpdated)
       # trigger(:recordSelected)
+      js_emit += js_flash_feedback("Record updated.")
       # TODO: add some kind of feedback
       # Perhaps do this in the form of triggering a feedback event that a feedback widget watches.
       # Alternatively, I can inject js to replace a feedback div's content.
-      js_emit = <<-JS
+      js_emit += <<-JS
         closeEditPanel('##{@jqgrid_id}');
       JS
     else
-      puts "Some kind of error saving in edit_panel_submit"
+      js_emit += js_flash_feedback('Some kind of error saving in edit_panel_submit')
     end
     # reload as if we got an updated message from a hypothetical child
     # render :js => update_recordset_js(false) + js_emit
@@ -327,6 +341,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
       closeEditPanel('##{@jqgrid_id}');
     JS
     js_emit += js_select_id(nil)
+    js_emit += js_flash_feedback("Record deleted.")
     trigger(:recordUpdated)
     trigger(:recordUnselected)
     render :js => js_emit + update_recordset_js(false)
@@ -462,6 +477,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   # This is called in the parent by the child to pick up the choice from the child.
   # TODO: Put the Javascript somewhere better if I can
   def update_choice_js(source, subrecord)
+    js_emit = ''
     if selector = @selectors[source]
       field, custom = selector
       resource_field = resource + '_' + field.to_s
@@ -472,18 +488,17 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
       @record[field] = subrecord.id
       display_value = escape_javascript(self.send(custom, @record.clone))
       # Because I don't have access to address_to_event here, I stored the cell click url in the jqgrid.data
-      return <<-JS
-        ensureTitlePanel("##{@jqgrid_id}",jQuery('##{@jqgrid_id}').data('cell_click_url'));
+      js_emit = <<-JS
+        /*ensureTitlePanel("##{@jqgrid_id}",jQuery('##{@jqgrid_id}').data('draw_panel_url')); */
         var f = jQuery("##{@jqgrid_id}").closest('.ui-jqgrid-view').find('.jqgw-form');
         f.find('#display_#{resource_field}').html('#{display_value}').effect('highlight');
         f.find('##{resource_field}').val('#{subrecord.id}');
         JS
-    else
-      return ''
+      js_emit += js_flash_feedback("Choice updated.")
     end
+    return js_emit
   end
   
-
   # SUPPORTING METHODS
   
   # descendents_to_reload creates a list of all descendants that have the select_on_load property set and so
@@ -705,15 +720,17 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     end
   end
 
-  # Javascript to set the choice mark on the jqGrid (unset all others), then reset.
+  # Javascript to set the choice mark on the jqGrid (unset all others)
   def js_choose_id(id = nil)
     if id
       return <<-JS
         var g = jQuery('##{@jqgrid_id}'),
-        ids = g.getDataIDs();
+        ids = g.jqGrid('getDataIDs'),
+        i = 0;
         if (ids.length > 0) {
-          for (id in ids) {
-            g.setRowData(id,{'#{choice_mark_column_name}':(id=='#{id}')?('#{chosen_icon}'):('#{not_chosen_icon}')});
+          for (i=0;i<ids.length;i=i+1)
+          {
+            g.setRowData(ids[i],{'#{choice_mark_column_name}':(ids[i]=='#{id}')?('#{chosen_icon}'):('#{not_chosen_icon}')});
           }
         }
       JS
