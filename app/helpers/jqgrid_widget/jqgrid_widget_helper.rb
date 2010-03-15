@@ -285,7 +285,7 @@ module JqgridWidget::JqgridWidgetHelper
     javascript_tag <<-JS
       jQuery('##{table}_filters').load('#{filter_partial}', function() {
         jQuery(this).find('input[type=checkbox]').click(function() {
-          jQuery(this).find
+          //jQuery(this).find
           var options = {
             dataType:'script'
           }

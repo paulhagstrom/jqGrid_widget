@@ -423,9 +423,14 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   end
     
   # State _set_filter
-  # This is triggered by clicking on a filter
-  # This receives changes in the filter and deals with them.
-  # Relies on strategic naming of the filter id to have the filter key first, followed by __.
+  # This is triggered by clicking on a filter, which sets a parameter :catid
+  # The catid parameter is named like filter.key__jqgrid.id_filter_category.
+  # The filter key itself is derived from the beginning of this.
+  # When the thing is first drawn, an :init parameter is passed.
+  # With no :catid, the :filter parameter is presumed to hold the filter key.
+  # Subfilters come in as additional parameters under subfilter.
+  # Specifically subfilter[subfilter_key][id] = 1 (not mentioned, zero)
+  # These are stored in @filter and @subfilter.
   def _set_filter
     if param(:catid)
       catsplit = param(:catid).split('__')
@@ -442,6 +447,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     end
     @filter = new_filter
     @subfilter = param(:subfilter) ? param(:subfilter) : {}
+    puts "FILTER FILTER FILTER UPDATED UPDATED UPDATED. filter " + @filter.inspect + ' ** SUBFILTER ** ' + @subfilter.inspect
     redraw_filter = filter_unchanged ? '' : js_redraw_filter
     clear_checkboxes = (filter_unchanged && category_not_clicked) ? '' : <<-JS
       jQuery('##{@jqgrid_id}_#{@filter}_filter_form').find('input[type=checkbox]').attr('checked',false);
@@ -657,19 +663,24 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     subfilter ||= {}
     filter = @filters.assoc(verified_filter)[1]
     # I had to do this in this kind of funny way to avoid actually modifying @filters.
-    find_conditions = filter.has_key?(:conditions) ? filter[:conditions] : ['1']
+    find_conditions = filter.has_key?(:conditions) ? filter[:conditions].dup : ['1']
     find_include = []
     # find_conditions += filter[:conditions] if filter.has_key?(:conditions)
     find_include += filter[:include] if filter.has_key?(:include)
+    # If no subfilters have been checked, this should be skipped, accept all
+    # If some subfilters have been checked, only the checked ones will be traversed.
+    # Within a single key, two checks yields OR
+    # Across keys, two checks yield AND
+    # The idea is that the subfilter conditions will read "field in (?)"
+    # And then the keys will provide the array of options
     subfilter.each do |key, sf|
-      # TODO: Could use some error checking in here.
-      fsf = filter[:subfilters].assoc(key)[1]
-      find_conditions[0] += (' and ' + fsf[:conditions]) if fsf.has_key?(:conditions)
+      fsf = filter[:subfilters].assoc(key)[1].dup
+      find_conditions[0] += (' and ' + fsf[:conditions])
       find_conditions << sf.keys
       find_include << fsf[:include] if fsf.has_key?(:include)
     end
     total_records = scoped_model.count(:all, :include => find_include, :conditions => find_conditions)
-    # puts "%%%%% FILTER INFO IN FILTER_PREPARE: include:[#{find_include.inspect}], conditions:[#{find_conditions.inspect}]."
+    puts "%%%%% FILTER INFO IN FILTER_PREPARE: include:[#{find_include.inspect}], conditions:[#{find_conditions.inspect}]."
     return[verified_filter, subfilter, find_include, find_conditions, total_records]
   end
   
