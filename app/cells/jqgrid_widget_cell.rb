@@ -447,7 +447,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     end
     @filter = new_filter
     @subfilter = param(:subfilter) ? param(:subfilter) : {}
-    puts "FILTER FILTER FILTER UPDATED UPDATED UPDATED. filter " + @filter.inspect + ' ** SUBFILTER ** ' + @subfilter.inspect
+    # puts "FILTER FILTER FILTER UPDATED UPDATED UPDATED. filter " + @filter.inspect + ' ** SUBFILTER ** ' + @subfilter.inspect
     redraw_filter = filter_unchanged ? '' : js_redraw_filter
     clear_checkboxes = (filter_unchanged && category_not_clicked) ? '' : <<-JS
       jQuery('##{@jqgrid_id}_#{@filter}_filter_form').find('input[type=checkbox]').attr('checked',false);
@@ -680,7 +680,7 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
       find_include << fsf[:include] if fsf.has_key?(:include)
     end
     total_records = scoped_model.count(:all, :include => find_include, :conditions => find_conditions)
-    puts "%%%%% FILTER INFO IN FILTER_PREPARE: include:[#{find_include.inspect}], conditions:[#{find_conditions.inspect}]."
+    # puts "%%%%% FILTER INFO IN FILTER_PREPARE: include:[#{find_include.inspect}], conditions:[#{find_conditions.inspect}]."
     return[verified_filter, subfilter, find_include, find_conditions, total_records]
   end
   
@@ -758,13 +758,14 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     JS
   end
 
-  # Javeascript to redraw a filter
+  # Javascript to redraw a filter
+  # Again, the slideUp and slideDown actions don't seem to work, so I will animate the height.
   def js_redraw_filter
     return <<-JS
     jQuery('##{@jqgrid_id}_filter_header').find('.ui-state-highlight').removeClass('ui-state-highlight').addClass('ui-state-default');
     jQuery('##{@filter}__#{@jqgrid_id}_filter_category').addClass('ui-state-highlight');
-    jQuery('.jqgw-filter-open').removeClass('jqgw-filter-open').slideUp('normal');
-    jQuery('##{@jqgrid_id}_#{@filter}_filter_form').addClass('jqgw-filter-open').slideDown('normal');
+    jQuery('.jqgw-filter-open').removeClass('jqgw-filter-open').animate({height:'hide'},'fast');
+    jQuery('##{@jqgrid_id}_#{@filter}_filter_form').addClass('jqgw-filter-open').animate({height:'show'},'fast');
     JS
   end
 
