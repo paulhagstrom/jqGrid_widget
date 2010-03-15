@@ -123,7 +123,7 @@ module JqgridWidget::JqgridWidgetHelper
     js_emit += <<-JS
     activateTitleBar('##{@jqgrid_id}');
     jQuery('#load_#{@jqgrid_id}').html("<img src='/images/indicator.white.gif'>");
-    jQuery('##{@jqgrid_id}').data('cell_click_url', '#{url_for(address_to_event({:type => :cellClick, :escape => false}, :data))}');
+    jQuery('##{@jqgrid_id}').data('cell_click_url', '#{url_for(address_to_event({:type => :cellClick, :escape => false}))}');
     jQuery('##{@jqgrid_id}').data('draw_panel_url', '#{url_for(address_to_event({:type => :drawPanel, :escape => false}, :data))}');
     JS
 

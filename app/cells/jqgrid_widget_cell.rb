@@ -178,33 +178,15 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
   
   # Communications
   
-  # State _row_click
-  # Supposed to be obsolete, there should be no more rowClick events.
-  # This is triggered by a widget firing an :rowClick event.
-  # The row click is intended to handle record selection in a list, only.
-  # For actions that occur when a row is clicked on, refer to the :cellClick handler, which also fires.
-  def _row_click
-    render :js => select_record_js(param(:id))
-  end
+  # # State _row_click
+  # # Supposed to be obsolete, there should be no more rowClick events.
+  # # This is triggered by a widget firing an :rowClick event.
+  # # The row click is intended to handle record selection in a list, only.
+  # # For actions that occur when a row is clicked on, refer to the :cellClick handler, which also fires.
+  # def _row_click
+  #   render :js => select_record_js(param(:id))
+  # end
   
-  # This locates the record passed in by id and stores it in @record (if it wasn't already there)
-  # When found, a recordSelected event is announced (will tell the children)
-  # If not found, a recordUnselected even is announed (will tell the children)
-  # Javascript return will set the selection in the table.
-  def select_record_js(id)
-    unless @record && @record.id == id #only announce if there was a change.
-      if @record = scoped_model.find_by_id(id)
-        trigger(:recordSelected)
-        return js_select_id(id)
-      else
-        @record = scoped_model.new
-        trigger(:recordUnselected)
-        return js_select_id(nil)
-      end
-    end
-    return ''
-  end
-    
   # The parent widget has posted a recordSelected event.
   # A standard subgrid will send a new recordset based on the parent's (new) selection.
   # A selector will set the selection based on the parent's newly selected record.
@@ -239,13 +221,31 @@ class JqgridWidgetCell < Apotomo::StatefulWidget
     render :js => update_recordset_js(false)
   end
   
+  # This locates the record passed in by id and stores it in @record (if it wasn't already there)
+  # When found, a recordSelected event is announced (will tell the children)
+  # If not found, a recordUnselected even is announed (will tell the children)
+  # Javascript return will set the selection in the table.
+  def select_record_js(id)
+    unless @record && @record.id == id #only announce if there was a change.
+      if @record = scoped_model.find_by_id(id)
+        trigger(:recordSelected)
+        return js_select_id(id)
+      else
+        @record = scoped_model.new
+        trigger(:recordUnselected)
+        return js_select_id(nil)
+      end
+    end
+    return ''
+  end
+    
   # A cellClick event (a cell was clicked on in this widget)
   # It should receive id (rowid), table (jqgrid id), cell_column (cell index)
   # TODO: The add function here doesn't make much sense in the context of column panels.
   # TODO: Are column panels really important?  Or maybe just for viewing?
   def _cell_click
-    id = param(:id).to_i
-    js_emit = select_record_js(id)    
+    js_emit = select_record_js(param(:id).to_i)
+    id = @record.id.to_i
     if id > 0
       panel_type = nil
       # Priority goes to actions defined by columns

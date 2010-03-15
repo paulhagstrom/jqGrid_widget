@@ -73,20 +73,19 @@ class JqgridWidgetController < ApplicationController
     cell_class = opts[:cell_class] || (resource_alias.pluralize + '_cell').camelize
     jqgrid_id = opts[:jqgrid_id] || (pfx + resource_alias.pluralize + '_list')
     x = widget(cell_class, :_setup, widget_id, opts.merge({:resource => resource, :jqgrid_id => jqgrid_id}))
-    # All widgets watch themselves for cellClick, rowClick, and deleteRecord events
+    # All widgets watch themselves for cellClick, drawPanel, and deleteRecord events
     x.watch(:cellClick, x.name, :_cell_click, x.name)
-    x.watch(:rowClick, x.name, :_row_click, x.name) # should be obsolete
+    # x.watch(:rowClick, x.name, :_row_click, x.name) # should be obsolete
     x.watch(:drawPanel, x.name, :_draw_panel, x.name)
     x.watch(:deleteRecord, x.name, :_delete_record, x.name)
     # Return the widget
     return x
   end
 
-  # A relatively non-magical version of jqg_widget(resource, :top_widget => 'yes', ...).  Everything else
+  # A relatively non-magical version of jqg_widget(resource, :top_widget => true, ...).  Everything else
   # is as above for jqg_widget
   def jqg_top_widget(resource, opts = {})
     return jqg_widget(resource, {:top_widget => true}.merge(opts))
-    # return jqg_widget(resource, {:top_widget => 'yes'}.merge(opts))
   end
   
   # Add a child widget to a parent widget (and do the necessary event wiring).
@@ -111,22 +110,5 @@ class JqgridWidgetController < ApplicationController
     embed_widget(parent_cell, child_cell = jqg_widget(resource, opts))
     return child_cell
   end
-
-  # This was the old handle_select, which I want to investigate a bit, since it is one of the only
-  # places that I know of where I get access to the information about an event's source.
-  # Or maybe event actually works, I haven't tried it.  No.  There may be no workaround except
-  # to have this kind of global event handler that will then pass the source back down.
-  # What I guess I would do is have a global handler for recordChosen and.. what? Who gets the
-  # information? The source would be the selector widget.  I guess I tell its parent.
-  # event.source.parent.update_choice(params[:id])
-  # something like that. Let's try it.
-  # def handle_select(event)
-  #   event.source.select_record(params[:id])
-  #   ''
-  # end
-  # Er, but I'm a doofus.  Parent would work just as well in a local handler.
-  # def handle_choice(event)
-  #   event.source.parent.update_choice(params[:id])
-  # end
   
 end
