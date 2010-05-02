@@ -1,5 +1,6 @@
 JQGrid widget
 A widget designed for Apotomo using jQuery and the jQGrid plugin
+(Now attempting to add support for datatables, will probably require a rename of the plugin later)
 
 The usage information is out of date.  See the jqgrid_widget_demo for usage examples.
 
