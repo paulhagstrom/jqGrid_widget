@@ -75,7 +75,8 @@ module JqgridWidget::JqgridWidgetHelper
       # If no pager is set, rows is set to "all" (-1).
       :pager => {},
       :pager_id => @jqgrid_id + '_pager',
-      :url => url_for(address_to_event({:state => '_send_recordset', :escape => false})),
+      :url => url_for_event(:fetchData),
+      # :url => url_for_event(:_send_recordset, :escape => false),
       :initial_sort => @columns[0][:index],
       :add_button => true,
       :del_button => true,
@@ -120,11 +121,15 @@ module JqgridWidget::JqgridWidgetHelper
     # Store the callback url for a cell click so that I can use it later to regenerate the table
     # Same for the url that provides the html for the edit panels
     # TODO: Someday make this not an event, if possible, would speed things up.
+    # Not sure if I have url_for_event used right here.  Also, not sure whether I need :data, or :escape => false.
+    # I don't remember what they used to do, though the point with draw_panel_url was I think that it wanted JS.
+    # I expect this to fail the first time around. Indeed, it doesn't work with :data there.  Taking it out.
+    # used to read jQuery('##{@jqgrid_id}').data('draw_panel_url', '#{url_for_event(:drawPanel, {:escape => false}, :data)}');
     js_emit += <<-JS
     activateTitleBar('##{@jqgrid_id}');
     jQuery('#load_#{@jqgrid_id}').html("<img src='/images/indicator.white.gif'>");
-    jQuery('##{@jqgrid_id}').data('cell_click_url', '#{url_for(address_to_event({:type => :cellClick, :escape => false}))}');
-    jQuery('##{@jqgrid_id}').data('draw_panel_url', '#{url_for(address_to_event({:type => :drawPanel, :escape => false}, :data))}');
+    jQuery('##{@jqgrid_id}').data('cell_click_url', '#{url_for_event(:cellClick)}');
+    jQuery('##{@jqgrid_id}').data('draw_panel_url', '#{url_for_event(:drawPanel)}');
     JS
 
     javascript_tag js_emit
@@ -135,7 +140,7 @@ module JqgridWidget::JqgridWidgetHelper
   def wire_jqgrid_nav(options)
     if options[:del_button]
       prmDel = {
-        :url => url_for(address_to_event({:type => :deleteRecord, :escape => false}))
+        :url => url_for_event(:deleteRecord)
       }
     else
       prmDel = {}
@@ -278,10 +283,16 @@ module JqgridWidget::JqgridWidgetHelper
   end
   
   # This wires up the filters
+  # I am very unsure of my use of url_for event here. I don't know what the fate :data is, or why it is outside.
+  # Removed :data, won't compile.  filter_partial and filter_counts used to read
+  # url_for_event(:_filter_display, {:escape => false}, :data)
   def wire_filters(table = @jqgrid_id)
-    filter_partial = url_for(address_to_event({:state => '_filter_display', :escape => false}, :data))
-    subfilter_open = url_for(address_to_event({:state => '_set_filter', :escape => false}))
-    filter_counts = url_for(address_to_event({:state => '_filter_counts', :escape => false}, :data))
+    filter_partial = url_for_event(:filterDisplay)
+    subfilter_open = url_for_event(:setFilter)
+    filter_counts = url_for_event(:filterCounts)
+    # filter_partial = url_for_event(:_filter_display, :escape => false)
+    # subfilter_open = url_for_event(:_set_filter, :escape => false)
+    # filter_counts = url_for_event(:_filter_counts, :escape => false)
     javascript_tag <<-JS
       jQuery('##{table}_filters').load('#{filter_partial}', function() {
         jQuery(this).find('input[type=checkbox]').click(function() {
@@ -306,7 +317,8 @@ module JqgridWidget::JqgridWidgetHelper
   
   # Provide the HTML for a live search field
   def html_live_search_to_wire(field, prompt = 'Search', table = @jqgrid_id)
-    submit_search_url = url_for(address_to_event({:state => '_send_recordset', :escape => false}))
+    submit_search_url = url_for_event(:fetchData)
+    # submit_search_url = url_for_event('_send_recordset', {:escape => false})
     <<-HTML
     <form id="#{table}_#{field}_search_form" action="#">
       #{prompt}: <input type="text" name="#{field}" autocomplete="off" value="" id="#{table}_#{field}_search" onkeydown="doLiveSearch('#{table}_#{field}_search','#{submit_search_url}', arguments[0]||event)" />
@@ -343,7 +355,8 @@ module JqgridWidget::JqgridWidgetHelper
   def selector_display(selector_id)
     if selector = @selectors[selector_id]
       field, custom = selector
-      resource = @cell.resource
+      # resource = @cell.resource
+      resource = @resource
       display_value = self.send(custom, @record)
       <<-HTML
       <span id='display_#{resource}_#{field}'>#{display_value}</span>
