@@ -7,7 +7,6 @@ The usage information is out of date.  See the jqgrid_widget_demo for usage exam
 Installation may someday be done with the Rails plugin architecture, but for now, it's all direct.  I use submodules and symbolic links, and it goes like this:
 
 cd rails_app
-git submodule add git://github.com/aaronchi/jrails.git vendor/plugins/jrails
 git submodule add git://github.com/apotonick/cells.git vendor/plugins/cells
 git submodule add git://github.com/apotonick/apotomo.git vendor/plugins/apotomo
 git submodule add git://github.com/paulhagstrom/jqGrid_widget.git vendor/plugins/jqgrid_widget
@@ -30,7 +29,7 @@ Added as a submodule, git will update
 
 cells
 git://github.com/apotonick/cells.git
-Added as a submodule, git will update
+Added as a gem
 
 jQuery
 This can be downloaded from jquery.com.  As I write this, it's at 1.4.2.  Put updates in the public/javascripts folder.  There is a symbolic link (jquery.js) to the current version, which needs to be redirected when there is an update.  I have opted to point the symbolic link at the version that comes with jQuery UI, however.
@@ -46,9 +45,6 @@ The git source is plugged in with a loader, which makes it easier to keep up to 
 http://www.trirand.com/blog/
 As I write this, 3.6.4 is available, and I have built it as jquery.jqGrid.min.js.  This does not point into the repository, and will not be updated by git updates, it needs to be fixed by hand.  There is an alias jqGrid in vendor/plugins that points to the current jqGrid directory.
 
-jrails
-git://github.com/aaronchi/jrails.git
-I decided it's easier to just go ahead and use this.
 
 
 Usage: QUITE SERIOUSLY OUT OF DATE

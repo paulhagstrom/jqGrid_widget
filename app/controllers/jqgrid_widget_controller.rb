@@ -52,7 +52,7 @@ class JqgridWidgetController < ApplicationController
   # When the widget is created, it will also be told to watch for :openEditPanel and :editPanelCancel events
   # originating in its own list, and sets the handlers.
   def jqg_widget(resource, opts = {})
-    # cell_class is now just a string
+    # cell_class is just a string
     # top_widget is passed along if provided
     # jqgrid_id and resource are required by the widget
     pfx = opts[:prefix] || ''
