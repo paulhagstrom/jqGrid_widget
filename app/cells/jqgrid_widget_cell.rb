@@ -96,6 +96,13 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   #   degree.program_id ? degree.program.name : '(??)'
   # end
   
+  # Live search fields are a little bit tricky.  They work like this:
+  # @livesearch_fields is a hash where the key matches a search box (specified when wired into the view)
+  # The value for this key is an array of fields in the database that will be searched.
+  # So, for example {'name' => ['person.last_name', 'person.first_name']}
+  # If somebody types "a x", then it is going to look for BOTH a and x.  It does this by looking for
+  # a in any of the fields and x in any of the fields.
+  
   # Other things one can define in _setup (I think, these two might be obsolete)
   # @children_to_hide (array of ids of the tables that will be collapsed upon a row select)
   # @children_to_trigger (array of ids of the tables that will be put into a 'loading...' state upon a row select)
@@ -133,8 +140,9 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   def _setup
     # puts "Hello from setup: " + self.name.to_s + ", @opts is #{@opts.inspect}, @resource is #{@resource.inspect}."
     @filters = [['all', {:name => 'All'}]]
-    @filter = @filters.first
+    @filter = @filters.first[0]
     @columns = []
+    @livesearch_fields = {}
     @jqgrid_options = {
       :row_action => 'title_panel',
       :row_object => '_panel',
@@ -560,6 +568,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   # :custom => :method_name (method in cell definition to provide output for the cell, via self.send :method_name)
   # :action => 'row_panel', 'title_panel', or 'event' (or nothing, for no cell select action)
   # :object => name of partial to render (row_panel, title_panel) or something about the event.
+  # :alias => 'field' -- this is used by the livesearch as a way to refer toa a field without periods.
   def add_column(field, options = {})
     # jqGrid options
     options[:index] = field
@@ -648,11 +657,19 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
       puts "??Why is start_offset negative?"
       @start_offset = 0
     end
-    if @livesearch
-      # Allow several partial matches by splitting the search string
-      @livesearch.split(' ').each do |substring|
-        find_conditions[0] += " and #{@livesearch_field} LIKE ?"
-        find_conditions << "%#{substring}%"
+    if @livesearch && @livesearch.size > 0
+      livesearch_fields = @livesearch_fields[@livesearch_field] rescue []
+      if livesearch_fields.size > 0
+        fields_conditions = []
+        @livesearch.split(' ').each do |substring|
+          live_conditions = []          
+          livesearch_fields.each do |f|
+            find_conditions << "%#{substring}%"
+            live_conditions << "#{f} LIKE ?"          
+          end
+          fields_conditions << '(' + live_conditions.join(' or ') + ')'
+        end
+        find_conditions[0] += ' and (' + fields_conditions.join(' and ') + ')'
       end
     end
     puts "Rows per page #{@rows_per_page}, offset #{@start_offset}, find_order #{find_order}, find_conditions #{find_conditions}, find_include #{find_include}."

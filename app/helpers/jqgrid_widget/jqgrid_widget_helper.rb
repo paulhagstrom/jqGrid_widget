@@ -167,7 +167,7 @@ module JqgridWidget::JqgridWidgetHelper
   # Return the Javascript columns model (with just the jQGrid options, not the JqgridWidget options)
   # See http://www.secondpersonplural.ca/jqgriddocs/index.htm
   def wire_jqgrid_columns
-    omit_options = [:custom, :action, :object]
+    omit_options = [:custom, :action, :object, :alias]
     (@columns.map {|c| jqgrid_make_js(c.dup.delete_if{|k,v| omit_options.include?(k)})}).join(',')
   end
   
