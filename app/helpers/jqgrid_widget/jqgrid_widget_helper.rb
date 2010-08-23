@@ -1,15 +1,8 @@
 module JqgridWidget::JqgridWidgetHelper
   include JqgridWidgetUtilities
   
-  # JqgridWidgetHelper defines a few things to use in the views to get the jqgrid_widgets in there.
-  #
-  # This requires jqGrid 3.6 or later, as it uses the "new API"
-  #
   # Minimally, you need to call html_table_to_wire in the place where you want the jqgrid to be,
   # and then call wire_jqgrid to insert the Javascript that will connect the jqgrid to it.
-  # Those are the main two methods here for use from the outside, but there are a lot of methods
-  # here that support the wire_ methods.  All of the jQGrid-specific Javascript should be in here, or
-  # else in the jqgrid_widget.js file in public/javascripts.
   #
   # To use this, put in your cell view something like:
   # <%= html_table_to_wire %>
@@ -19,10 +12,7 @@ module JqgridWidget::JqgridWidgetHelper
   # TODO: Document this better.
   
   # html_table_to_wire inserts an empty table and div into the html, where the grid and pager will go.
-  # A subsequent call to wire_jqgrid will fill it in and start it up.
-  # Relies on having @jqgrid_id set.
   def html_table_to_wire
-    # puts "Hello from html_table_to_wire: " + @cell.name.to_s
     <<-HTML
 		<table id="#{@jqgrid_id}" class="scroll layout_table" cellpadding="0" cellspacing="0"></table>
 		<div id="#{@jqgrid_id}_pager" class="scroll" style="text-align:center;"></div>
@@ -91,10 +81,8 @@ module JqgridWidget::JqgridWidgetHelper
       :initial_sort => :sortname,
       :collapsed => :hiddengrid,
     }
-    
-    # What is the point of the jQuery() call there?
-    # empty_table = @is_top_widget ? "jQuery('##{@jqgrid_id}');" : js_push_json_to_cache(empty_json)
-    # js_emit = @is_top_widget ? "jQuery('##{@jqgrid_id}');" : js_push_json_to_cache(empty_json)
+
+    # If this is a child widget, set up an empty dataset
     js_emit = @is_top_widget ? '' : js_push_json_to_cache(empty_json)
     
     # TODO: This does not emit particularly pretty Javascript. Maybe clean this up someday.
@@ -121,10 +109,6 @@ module JqgridWidget::JqgridWidgetHelper
     # Store the callback url for a cell click so that I can use it later to regenerate the table
     # Same for the url that provides the html for the edit panels
     # TODO: Someday make this not an event, if possible, would speed things up.
-    # Not sure if I have url_for_event used right here.  Also, not sure whether I need :data, or :escape => false.
-    # I don't remember what they used to do, though the point with draw_panel_url was I think that it wanted JS.
-    # I expect this to fail the first time around. Indeed, it doesn't work with :data there.  Taking it out.
-    # used to read jQuery('##{@jqgrid_id}').data('draw_panel_url', '#{url_for_event(:drawPanel, {:escape => false}, :data)}');
     js_emit += <<-JS
     activateTitleBar('##{@jqgrid_id}');
     jQuery('#load_#{@jqgrid_id}').html("<img src='/images/indicator.white.gif'>");
@@ -233,14 +217,10 @@ module JqgridWidget::JqgridWidgetHelper
   end
 
   # Click handling
-  # This handles everything, on the basis of a cell select (used to be split into subcalls). Simpler.
+  # This handles everything, on the basis of a cell select.
   # TODO: However, it's much slower, because nothing happens immediately, AJAX needs to be waited for.
-  # It would be nice if I could make the OpenRowPanel or OpenTitlePanel from here.
-  # Or at least provide some kind of loading feedback.
+  # TODO: It would be nice if I could make the OpenRowPanel or OpenTitlePanel from here, or provide some loading feedback.
   def wire_jqgrid_cellselect(options)
-    # cell_actions = jqgrid_make_js(@columns.map {|c| c[:action]})
-    # default_action = jqgrid_make_js(options[:row_action])
-    # url = jqgrid_make_js(url_for(address_to_event({:type => :cellClick, :escape => false}, :data)))
     <<-JS
     onCellSelect: function(rowid,cellindex,html,event) {
     	var specs = clickSpecsData(rowid,cellindex,event.target),
@@ -283,20 +263,13 @@ module JqgridWidget::JqgridWidgetHelper
   end
   
   # This wires up the filters
-  # I am very unsure of my use of url_for event here. I don't know what the fate :data is, or why it is outside.
-  # Removed :data, won't compile.  filter_partial and filter_counts used to read
-  # url_for_event(:_filter_display, {:escape => false}, :data)
   def wire_filters(table = @jqgrid_id)
     filter_partial = url_for_event(:filterDisplay)
     subfilter_open = url_for_event(:setFilter)
     filter_counts = url_for_event(:filterCounts)
-    # filter_partial = url_for_event(:_filter_display, :escape => false)
-    # subfilter_open = url_for_event(:_set_filter, :escape => false)
-    # filter_counts = url_for_event(:_filter_counts, :escape => false)
     javascript_tag <<-JS
       jQuery('##{table}_filters').load('#{filter_partial}', function() {
         jQuery(this).find('input[type=checkbox]').click(function() {
-          //jQuery(this).find
           var options = {
             dataType:'script'
           }
@@ -318,7 +291,6 @@ module JqgridWidget::JqgridWidgetHelper
   # Provide the HTML for a live search field
   def html_live_search_to_wire(field, prompt = 'Search', table = @jqgrid_id)
     submit_search_url = url_for_event(:fetchData)
-    # submit_search_url = url_for_event('_send_recordset', {:escape => false})
     <<-HTML
     <form id="#{table}_#{field}_search_form" action="#">
       #{prompt}: <input type="text" name="#{field}" autocomplete="off" value="" id="#{table}_#{field}_search" onkeydown="doLiveSearch('#{table}_#{field}_search','#{submit_search_url}', arguments[0]||event)" />
@@ -352,10 +324,10 @@ module JqgridWidget::JqgridWidgetHelper
     submit_tag "Cancel", :onClick => 'closeEditPanel(this);return false;'
   end
 
+  # TODO: Check to see if I can avoid the need to use helper_method in the cell class for the custom field using cell.send or controller.send
   def selector_display(selector_id)
     if selector = @selectors[selector_id]
       field, custom = selector
-      # resource = @cell.resource
       resource = @resource
       display_value = self.send(custom, @record)
       <<-HTML

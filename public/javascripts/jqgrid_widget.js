@@ -99,7 +99,7 @@ function ensureTitlePanel(target,url) {
 function openTitlePanel(specs, url, reopen) {
 	var id = specs['table'],
 	t = jQuery('#' + id),
-	//v = jQuery(target).closest('.ui-jqgrid-view'),
+	// v = jQuery(target).closest('.ui-jqgrid-view'),
 	vid = specs['table_view'],
 	v = jQuery('#' + vid),
 	xpans = v.find('.jqgw-form');
@@ -117,7 +117,7 @@ function openTitlePanel(specs, url, reopen) {
 				/*jqnd.slideDown('normal', function() {
 					jqnd.attr('id', pid);
 				}); */
-			});		
+			});
 	}
 }
 

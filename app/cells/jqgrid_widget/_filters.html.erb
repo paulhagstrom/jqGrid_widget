@@ -26,7 +26,7 @@
 		<tr>
 			<td>
 				<%# I am not sure I really need form_to_event here, since I take over the submission.  But I can set the target this way. %>
-				<%= form_to_event :state => :_set_filter %>
+				<%= form_to_event :setFilter %>
 				<%= hidden_field_tag 'filter', filter[0] %>
 				<table class="layout_table">
 					<tr>

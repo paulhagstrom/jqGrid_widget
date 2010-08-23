@@ -10,11 +10,13 @@ class JqgridWidgetController < ApplicationController
   
   # The index method here is intended to be called via 'super' from the subclass.
   # Maybe someday it will do something
+  # Right now I'm attempting to flush the root with each request, because I was running into problems when the tree was thawed
   def index
+    Apotomo::StatefulWidget.flush_storage(session)
   end
   
   protected
-  
+    
   # Call jqg_widget to create a widget.
   # This guesses most of the options to be used, although they can be overridden.
   # The resource is required, it is the name of the model from which the data will be drawn.
@@ -66,6 +68,7 @@ class JqgridWidgetController < ApplicationController
     x.respond_to_event :cellClick, :from => x.name, :with => :_cell_click, :on => x.name
     x.respond_to_event :drawPanel, :from => x.name, :with => :_draw_panel, :on => x.name
     x.respond_to_event :deleteRecord, :from => x.name, :with => :_delete_record, :on => x.name
+    x.respond_to_event :editSubmit, :from => x.name, :with => :_edit_panel_submit, :on => x.name
     # Now the retrieval of Javascript data is an event?  Used to be address_to, which was basically deep linking.
     # Maybe I can go back to that, but let's see if this works.
     x.respond_to_event :fetchData, :on => x.name, :with => :_send_recordset, :from => x.name
@@ -73,13 +76,16 @@ class JqgridWidgetController < ApplicationController
     x.respond_to_event :setFilter, :on => x.name, :with => :_set_filter, :from => x.name
     x.respond_to_event :filterCounts, :on => x.name, :with => :_filter_counts, :from => x.name
     # Return the widget
+    yield x if block_given?
     return x
   end
 
   # A relatively non-magical version of jqg_widget(resource, :top_widget => true, ...).  Everything else
   # is as above for jqg_widget
   def jqg_top_widget(resource, opts = {})
-    return jqg_widget(resource, {:top_widget => true}.merge(opts))
+    x = jqg_widget(resource, {:top_widget => true}.merge(opts))
+    yield x if block_given?
+    return x
   end
   
   # Add a child widget to a parent widget (and do the necessary event wiring).
@@ -93,6 +99,8 @@ class JqgridWidgetController < ApplicationController
     parent_cell.respond_to_event :recordUpdated, :on => parent_cell.name, :with => :_child_updated, :from => child_cell.name
     # Children watch themselves for recordChosen events, then send parent into update choice state
     child_cell.respond_to_event :recordChosen, :on => child_cell.name, :with => :_child_choice, :from => child_cell.name
+    yield child_cell if block_given?
+    return child_cell
   end
     
   # A shortcut for embed_widget(parent, child = jqgrid_widget('resource', opts...))
@@ -100,6 +108,7 @@ class JqgridWidgetController < ApplicationController
   # Returns the child widget
   def jqg_child_widget(parent_cell, resource, opts = {})
     embed_widget(parent_cell, child_cell = jqg_widget(resource, opts))
+    yield child_cell if block_given?
     return child_cell
   end
   

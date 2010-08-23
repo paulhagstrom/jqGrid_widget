@@ -1,43 +1,49 @@
 class JqgridWidgetCell < Apotomo::JavaScriptWidget
+
   include JqgridWidgetUtilities
   include JqgridWidgetCommunication
   include JqgridWidgetGrid
-  
-  # JqgridWidgetCell is the heart of the jQGrid widget, an extension of Apotomo's StatefulWidget
-  # TODO: Some documentation here.  Maybe even with rdoc.
-  
-  # In order to be able to do urlencoding, I bring in the Javascript helpers here.
-  # TODO: I forget where I use this.  Is it really urlencoding?  Do I really still use it?  Check.
-  include ActionView::Helpers::JavaScriptHelper 
-  # Bring in address_to_event, since I use it here (though I might like to put it somewhere else)
-  # It is now called url_for_event, I think.
-  include Apotomo::Rails::ViewHelper
-  
-  helper :all
+  include JqgridWidgetPatch
+    
+  include ActionView::Helpers::JavaScriptHelper # for escape_javascript in js_push_json_to_cache
+
+  helper JqgridWidget::JqgridWidgetHelper
+
   # Make some of the methods defined here available to the view as well
   helper_method :js_reload_grid, :js_select_id, :js_push_json_to_cache, :empty_json
   helper_method :param
   # helper_method :selector_field_id
-  # Make the JqgridWidgetHelper methods available to the view; these appear not to be noticed by helper :all
-  helper JqgridWidget::JqgridWidgetHelper
   
-  attr_reader :record  
-  attr_reader :jqgrid_id  # descendants_to_reload asks for this from children
+  # Make selected record gettable from the outside
+  attr_reader :record
+  # Make jqgrid_id gettable from the outside, descendants_to_reload asks for this from children
+  attr_reader :jqgrid_id
 
-  # SETUP
-  # Note: You might think that it would be sensible to put various things into an initialize method.
-  # However, I found that initialize is called quite a lot, for some reason.  _setup is called once at
-  # the beginning, so that seems to be the best place to do the real initialization.  See for yourself, if you'd like:
-  # def initialize(*args)
-  #   super(*args)
-  #   puts "Hello from initialize: " + self.name.to_s
-  # end
+  attr_reader :select_on_load
+  attr_reader :selector_for
+  attr_reader :records
   
-  # Assume all documentation-like comments may be out of date.
-  # The _setup state is the start state. This will render the partial app/cells/{cell}/_setup.html.erb.
-  # That partial should contain the widget placeholders (empty html table and div) and a setup call to jQGrid.
-  # The helpers html_table_to_wire and wire_jqgrid can assist in this endeavor.
-  # The initial wiring of the jqgrid will trigger a call to load the recordset.
+  # Configuration
+  #
+  # There are basically three kinds of widgets: parents, children, and selectors
+  # Regular children are the result of has_meny in the model, selectors are has_one.
+  #
+  # The initialize method is for setting things up that can be set up before the tree is assembled.
+  # These are generally set in the controller method.  The important ones are
+  # resource, jqgrid_id, selector_for, and top_widget
+  #
+  # The first state is _setup, where the majority of the setup happens, after which _setup.html.erb is rendered.
+  # This should be defined in your subclassed cell.  _setup takes a block, so in combination with add_column and
+  # add_choice_column, you can set up your table there.  _setup is also where you set up your filters, and grid options.
+  #
+  # For each widget you need a subclassed cell, a folder containing its views, and any of the partials that you need.
+  # Minimally, you'll need _panel, which defines the edit record form.  You may also want _setup if you want to do anything
+  # with the layout, wire in filters or livesearch.
+  #
+  # You'll need a controller and a controller index.html.erb view to control the layouts of the widgets.
+  # For controllers with just one widget, this is pretty boring, but if you want to lay out several widgets on a page, this
+  # is where it is done.
+  #
   # In order to reduce the number of AJAX requests, I have implemented a data-caching mechanism that is consulted
   # first before an AJAX request is made.  Upon initial wiring of all of the child tables, an empty recordset is cached,
   # which is used instead of querying the server.  When the topmost widget loads its recordset, it retrieves
@@ -45,112 +51,94 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   # of Javascript calls to push the JSON data into the caches of the parent widget and all of its descendants,
   # clear the rest, and then trigger reloads for everybody.
   #
-  # A subclass should call it in something like the following way.
-  # Other things one can define:
-  # @children_to_hide (ids of the tables that will be collapsed upon a row select)
-  # @children_to_trigger (ids of the tables that will be put into a 'loading...' state upon a row select)
-  # @select_first (true if the first record should be selected immediately upon loading the table)
-  # @rows_per_page (in principle the number of records per page when using paginator, not tested)
-  # @row_action = 'title_panel', 'row_panel', or 'event'
-  # @row_object = partial to render when a row is clicked for (title_panel, row_panel)
+  # In the controller, you pass information to initialize as below.  The super call is relevant because it will flush out the
+  # widget tree before adding, which seems to be useful.  jqg_top_widget sets up the top widget, to which children can be added
+  # in blocks.  The defaults are sensible (no options are generally needed past the resource name), but they can be set
+  # explicitly.  Here, :cell_class defines a widget class to use (instead of resources_cell), :widget_id defines the widget's
+  # id (instead of resource).  :selector_for is somewhat more important; if you have a selector, you want to set this here, naming
+  # the field to which the selection applies.
   #
-  # def _setup
-  #   super do |col|
-  #     col.add_column('name', :width => 100, :sortable => true)
-  #     col.add_column('degrees', :width => 175, :custom => :custom_degrees)
-  #     col.add_column('profiles', :width => 175, :custom => :custom_profiles)
+  # def index
+  #   super
+  #   use_widgets do |root|
+  #     root << jqg_top_widget('degree', :cell_class => 'degrees_select', :widget_id => 'degrees_select') do |degwid|
+  #       jqg_child_widget(degwid, 'program', :cell_class => 'program_lookup', :selector_for => :program_id)
+  #     end
   #   end
-  #   @children_to_hide = ['person_student_degrees_list', 'person_employee_sections_list']
   #   render
   # end
-  # TODO: Perhaps later I may want to be able to make the default filter not be the first one?
   #
-  # Something is going wrong with @opts in the newer Apotomo, it seems to get cleared out after
-  # the first call.  So, I need to store these options somewhere else?  Right, @opts is unfreezable.
-  # What was the rationale for not doing all of this in initialize again?  Initialize was called a lot.  See above.
-  # Perhaps I can trust that initialize is at least getting what it is supposed to?  Even if it is called a lot?
-
-  # Initialize the widget.
-  # There are basically three kinds of widgets: parents, children, and selectors
-  # Regular children are the result of has_meny in the model, selectors are has_one.
-  # Simplest case, set @opts[]
-  #   :resource => model name (string)
-  #   :jqgrid_id => dom id of the grid
-  # This will assume that the widget is a child widget; if it is a parent (top) widget,
-  #   :top_widget => true
-  # TODO: Reverse the default there, it seems like a top widget is the basic case
-  # Default grid options are set here, redefine @jqgrid_options after calling super in instance initialize
-  # Default filters are set here, redefine @filters after calling super in instance initialize
-  # Default dom id for the feedback is set to 'nav_feedback', redefine @feedback_span if needed
-  # Default for select_on_load is false (other options are true, 'unique', and 'exact').
-  # The expectation is that initialize will be called with a block of columns.
-  # def initialize
-  #   super do |col|
-  #     col.add_column('name', :width => 100, :sortable => true)
-  #     col.add_column('degrees', :width => 175, :custom => :custom_degrees)
-  #     col.add_column('profiles', :width => 175, :sortable => 'default')
-  #   end
-  #   ...
-  #   render
-  # end
-  # def initialize(*args)
-  #   super(*args)
-  #   puts "Hello from initialize: " + self.name.to_s + ", @opts is #{@opts.inspect}, @resource is #{@resource.inspect}."
-  #   # TODO: Figure out why this is called repeatedly, sometimes with empty opts.
-  #   # For now, just ignore the empty opts calls, assuming that the right values have already been frozen.
-  #   unless @opts.size == 0 
-  #     @resource = @opts[:resource]
-  #     @jqgrid_id = @opts[:jqgrid_id]
-  #     @is_top_widget = @opts[:top_widget] || false
-  #     @jqgrid_options = {
-  #       :row_action => 'title_panel',
-  #       :row_object => '_panel',
-  #       :caption => @resource.pluralize.humanize #'Records'
-  #     }
+  # In the subclassed widget, you set up the columns and grid as below.  This has a selector.  :program_name is the custom
+  # display function (translates from id to name).  Because there is a selector, the custom display function needs to be
+  # indicated as a helper_method, since there will be need to draw it in the view.  Selectors should also be listed in the
+  # @selectors hash, which has members like 'resource' => [:parent_field, :custom_display_method].
+  #
+  # helper_method :program_name
   # 
-  #     # The default filter is 'all'.
-  #     @filters = [['all', {:name => 'All'}]]
-  #       
-  #     @record = scoped_model.new
-  #   
-  #     @columns  = []
-  #   
-  #     # This is where the "flash updates" will go.  Should be a span.
-  #     @feedback_span = 'nav_feedback'
-  #   
-  #     # Determines whether the first record should be automatically selected.
-  #     # Can also be 'unique' (select iff there is only one record) or
-  #     # 'exact' (select even if not unique if it is the exact match of the filter string)
-  #     @select_on_load = false
-  #   
-  #     # If this is a selector (basically a pop up menu), put the local field here.
-  #     # TODO: In that case, will almost certainly be @resource + '_id' so perhaps I can replace @is_top_widget with a 3-way type.
-  #     # TODO: Can this be derived from the model? (Checking whether parent has_many or has_one child?)
-  #     @selector_for = nil
-  #   
-  #     yield self if block_given?
-  #   
-  #     @sortable_columns = (@columns.map {|c| c[:sortable] ? c[:index] : nil}).compact
-  #     @default_sidx = (@columns.map {|c| c[:sortable] == 'default' ? c[:index] : nil}).compact.first
-  #   end
-  # end
-
-  # # The _setup state simply renders the empty table at this point.
   # def _setup
+  #   super do |col|
+  #     col.add_column('name', :width => 100, :sortable => 'default')
+  #     col.add_column('section_id', :width => 50, :sortable => false, :custom => :section_name)
+  #   end
+  #   @jqgrid_options.update({
+  #     :rows_per_page => 20,
+  #     :height => 350
+  #   })
+  #   @selectors = {'program' => [:progam_id, :program_name]}
   #   render
   # end
-
-  def _setup
-    # puts "Hello from setup: " + self.name.to_s
-    puts "Hello from setup: " + self.name.to_s + ", @opts is #{@opts.inspect}, @resource is #{@resource.inspect}."
-    
-    unless @opts.size == 0
-      # Now in initialize
-      # Now back
-      @resource = @opts[:resource]
-      @jqgrid_id = @opts[:jqgrid_id]
-      @is_top_widget = @opts[:top_widget] || false
+  # 
+  # def section_name(degree)
+  #   degree.section_id ? degree.section.name : '(??)'
+  # end
+  # 
+  # def program_name(degree)
+  #   degree.program_id ? degree.program.name : '(??)'
+  # end
   
+  # Other things one can define in _setup (I think, these two might be obsolete)
+  # @children_to_hide (array of ids of the tables that will be collapsed upon a row select)
+  # @children_to_trigger (array of ids of the tables that will be put into a 'loading...' state upon a row select)
+
+  # @select_on_load determines whether the first item in a list should be selected.
+  # There are a couple of situations in which this might be desired.  One is for a one-to-many relationship
+  # where it is relatively unusual for the relationship to exceed one-to-one.  In this case, you might
+  # prefer to just display the value rather than have all of the screen real estate taken by table overhead.
+  # In this case, see also the @jqgrid_options[:single_record_caption], where the display can be configured.
+  # Tne automatic selection is accomplished by setting select_on_load to true.
+  # The other case is when the recordset is being narrowed by a search field.  If select_on_load is 'unique'
+  # then the single record left matching the search string will be selected (as soon as it is unique).
+  # If select_on_load is `exact' then if an exact match is found (unique or not), it will be selected.
+  # To imagine the difference, suppose you are searching for the television show "ER".  Good luck.  You
+  # won't get a unique match, but you could get an exact one in there.  Probably most of the time the
+  # desired behavior is going to be 'exact'.  'Exact' does imply 'unique' (exact match will be selected
+  # when non-unique, but if the list goes down to one member, the one member will be selected).
+
+  # initialize checks to see if thst start_state is set in order to avoid doing things when a temporary empty widget is created
+  def initialize(id, start_state, opts={})
+    # puts "Hello from initialize: " + id.to_s + ", " + start_state.to_s + ", opts: " + opts.inspect + "."
+    if start_state == :_setup
+      # important for parents, children, selectors
+      @resource = opts[:resource]
+      @jqgrid_id = @resource.pluralize + '_list_grid'
+      # is_top_widget is true for parents only, not children or selectors
+      @is_top_widget = opts[:top_widget] || false
+      # for selectors, selector_for should hold the field (symbol) of the parent's record the selection depends on, nil for parents, child
+      @selector_for = opts[:selector_for]
+    end
+    super(id, start_state, opts)
+  end
+
+  # TODO: See if @is_top_widget can be replaced by checking to see if (@)parent is nil
+  def _setup
+    # puts "Hello from setup: " + self.name.to_s + ", @opts is #{@opts.inspect}, @resource is #{@resource.inspect}."
+    @filters = [['all', {:name => 'All'}]]
+    @filter = @filters.first
+    @columns = []
+    @jqgrid_options = {
+      :row_action => 'title_panel',
+      :row_object => '_panel',
+      :caption => @resource.pluralize.humanize #'Records'
       # jqgrid_options can include:
       # :caption => printable plural form of resource (default 'Records')
       # :pager
@@ -166,127 +154,41 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
       #  :single_record_caption => "'Degree track: ' + row.name"
       # :row_action (default title_panel) determines where the edit panel appears. panel for under row.
       # :row_object (default _panel) is the partial to render when a row is clicked
-      @jqgrid_options = {
-        :row_action => 'title_panel',
-        :row_object => '_panel',
-        :caption => @resource.pluralize.humanize #'Records'
-      }
+    }
+    # This is where the "flash updates" will go.  Should be a span.
+    @feedback_span = 'nav_feedback'
+    # Determines whether the first record should be automatically selected.
+    # Can also be 'unique' (select iff there is only one record) or
+    # 'exact' (select even if not unique if it is the exact match of the filter string)
+    @select_on_load = false
+    @record = scoped_model.new
+          
+    yield self if block_given?
   
-      # The default filter is 'all'.
-      @filters = [['all', {:name => 'All'}]]
-        
-      @record = scoped_model.new
-    
-      @columns  = []
-    
-      # This is where the "flash updates" will go.  Should be a span.
-      @feedback_span = 'nav_feedback'
-
-      # Determines whether the first record should be automatically selected.
-      # Can also be 'unique' (select iff there is only one record) or
-      # 'exact' (select even if not unique if it is the exact match of the filter string)
-      @select_on_load = false
-  
-      # If this is a selector (basically a pop up menu), put the local field here.
-      # TODO: In that case, will almost certainly be @resource + '_id' so perhaps I can replace @is_top_widget with a 3-way type.
-      # TODO: Can this be derived from the model? (Checking whether parent has_many or has_one child?)
-      @selector_for = nil
-      
-      yield self if block_given?
-    
-      @sortable_columns = (@columns.map {|c| c[:sortable] ? c[:index] : nil}).compact
-      @default_sidx = (@columns.map {|c| c[:sortable] == 'default' ? c[:index] : nil}).compact.first
-    end
+    @sortable_columns = (@columns.map {|c| c[:sortable] ? c[:index] : nil}).compact
+    @default_sidx = (@columns.map {|c| c[:sortable] == 'default' ? c[:index] : nil}).compact.first
   end
   
   # Things you may want to override
   
-  
-  # To load a recordset for the table in this widget, a find call is passed to the scoped_model.
-  # If this is a top widget, it is appropriate to leave it as resource_model.  If this is a
-  # child widget, this can be something like parent.records.contacts (or, you have defined a named scope,
-  # that could also go here).  You can rely on records being an attribute of parent.
-  # def scoped_model
-  #   resource_model
-  # end
-  # I will try to do the most obvious thing if possible, so that it need only be redefined if something
-  # weird is desired.
-  # TODO: I have no idea if what I put there is the same as, e.g., parent.records.contacts.  I hope.
+  # To load a recordset or create a new record, a find or new call is passed to scoped_model.
+  # In the top widget or in a selector, this is just the resource for the widget (no actual scoping)
+  # You can override this, but it should work sensibly as-is for most uses.
+  # TODO: This could be coded more elegantly, but this works.
   def scoped_model
-    if @is_top_widget
+    if @is_top_widget || @selector_for
       Object.const_get @resource.classify
     else
-      parent.records.send(@resource.pluralize)
+      parent.record.send(@resource.pluralize) rescue Object.const_get @resource.classify
     end
   end
-
-  # select_on_load determines whether the first item in a list should be selected.
-  # There are a couple of situations in which this might be desired.  One is for a one-to-many relationship
-  # where it is relatively unusual for the relationship to exceed one-to-one.  In this case, you might
-  # prefer to just display the value rather than have all of the screen real estate taken by table overhead.
-  # In this case, see also the @jqgrid_options[:single_record_caption], where the display can be configured.
-  # Tne automatic selection is accomplished by setting select_on_load to true.
-  # The other case is when the recordset is being narrowed by a search field.  If select_on_load is 'unique'
-  # then the single record left matching the search string will be selected (as soon as it is unique).
-  # If select_on_load is `exact' then if an exact match is found (unique or not), it will be selected.
-  # To imagine the difference, suppose you are searching for the television show "ER".  Good luck.  You
-  # won't get a unique match, but you could get an exact one in there.  Probably most of the time the
-  # desired behavior is going to be 'exact'.  'Exact' does imply 'unique' (exact match will be selected
-  # when non-unique, but if the list goes down to one member, the one member will be selected).
-  # def select_on_load
-  #   false
-  # end
-
-  # If a child widget is serving as a glorified popup menu, where a choice in the child table
-  # determines the value of a field in the parent, then set selector_for for the child table to be
-  # the field (of the child) from which the id is drawn.  As a symbol.  Like :thingie_id.
-  # Returning nil means that the child is showing something like a one-to-many relation.
-  # TODO: This could potentially be guessed from information about has_many or belongs_to settings in
-  # the model.  But setting it explicitly is ok for now.
-  # def selector_for
-  #   nil
-  # end
 
   # If selector_for is set, selector_field_value is used to determine what the parent's
   # field is set to (the currently selected record).
   def selector_field_value
     parent.record[@selector_for] rescue nil
   end
-  
-  # STATES
-  
-  # For the moment, I'm just basically bypassing Apotomo's state transitions by allowing any state
-  # to transition to any other state.  transition_all should include all of the states, transition_map is
-  # defined off of that (and transition_map is what Apotomo itself consults).
-  # As far as I know, a transition can only be made if it is on the map, which is why I want to be able
-  # to go to anywhere from anywhere.  Limiting this doesn't seem like it will add much.
-  # TODO: Once this is all better defined, I should tighten this up probably, though it works as-is.
-  # I think that transitions are now obsolete.
-  # def transitions_all
-  #   [:_cell_click, :_edit_panel_submit, :_row_click, :_child_choice, :_delete_record,
-  #     :_child_updated, :_send_recordset, :_set_filter, :_draw_panel,
-  #     :_filter_display, :_filter_counts, :_setup, :_parent_selection, :_parent_unselection]
-  # end
-  # 
-  # def transition_map
-  #   {
-  #     :_setup => ([:_setup] + transitions_all).uniq,
-  #     :_send_recordset => ([:_send_recordset] + transitions_all).uniq,
-  #     :_cell_click => ([:_cell_click] + transitions_all).uniq,
-  #     :_row_click => ([:_row_click] + transitions_all).uniq,
-  #     :_edit_panel_submit => ([:_edit_panel_submit] + transitions_all).uniq,
-  #     :_delete_record => ([:_delete_record] + transitions_all).uniq,
-  #     :_child_updated => ([:_child_updated] + transitions_all).uniq,
-  #     :_set_filter => ([:_set_filter] + transitions_all).uniq,
-  #     :_filter_display => ([:_filter_display] + transitions_all).uniq,
-  #     :_filter_counts => ([:_filter_counts] + transitions_all).uniq,
-  #     :_parent_selection => ([:_parent_selection] + transitions_all).uniq,
-  #     :_parent_unselection => ([:_parent_unselection] + transitions_all).uniq,
-  #     :_child_choice => ([:_child_choice] + transitions_all).uniq,
-  #     :_draw_panel => ([:_draw_panel] + transitions_all).uniq,
-  #   }
-  # end
-  
+    
   # Communications
     
   # The parent widget has posted a recordSelected event.
@@ -351,6 +253,8 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     if id > 0
       panel_type = nil
       # Priority goes to actions defined by columns
+      # I am preparing to remove column actions, and require that all panels just load _panel.
+      # Maybe someday later I can bring back the complexity of column panels if they are really useful for something.
       case @columns[param(:cell_column).to_i][:action]
       when 'title_panel', 'panel'
         panel_type = @columns[param(:cell_column).to_i][:action]
@@ -372,6 +276,8 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
       panel_object = @jqgrid_options[:row_object]
     end
     if panel_type
+      # specs = jqgrid_make_js({:id => param(:id), :table => param(:table),
+      #   :cell_column => param(:cell_column), :table_view => param(:table_view)})
       specs = jqgrid_make_js({:id => param(:id), :table => param(:table), :panel => panel_object,
         :cell_column => param(:cell_column), :table_view => param(:table_view)})
     end
@@ -386,16 +292,12 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     
   # This returns the html for an edit panel
   # It is called by an event, but if I can get this directly, that would be better.  It's kind of slow now.
-  # TODO: Explore deep linking this
-  # Also it could use some feedback.
-  # This REALLY seems to want to execute as a Javascript page update.  I just want it to spit out the HTML.
-  # It is being called from external Javascript, and there's some action already defined there.
-  # However, maybe I can move the action into the Rails code instead.  If it wants page updates, maybe I
-  # can add the animations here.  Though, I'm not sure that's an option either.  What a mess this is.
+  # Note: I had to patch apotomo in order to keep this from spitting out a Javascript page update.
   def _draw_panel
+    @apotomo_emit_raw_view = true
     render :view => param(:panel)
   end
-  
+    
   # put some feedback up. No quotation marks allowed.
   # TODO: Allow quotation marks
   def js_flash_feedback(message)
@@ -420,11 +322,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     if @record.save
       @record.reload # Be sure we get the id if this was a new record
       trigger(:recordUpdated)
-      # trigger(:recordSelected)
       js_emit += js_flash_feedback("Record updated.")
-      # TODO: add some kind of feedback
-      # Perhaps do this in the form of triggering a feedback event that a feedback widget watches.
-      # Alternatively, I can inject js to replace a feedback div's content.
       js_emit += <<-JS
         closeEditPanel('##{@jqgrid_id}');
       JS
@@ -432,7 +330,6 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
       js_emit += js_flash_feedback('Some kind of error saving in edit_panel_submit')
     end
     # reload as if we got an updated message from a hypothetical child
-    # render :js => update_recordset_js(false) + js_emit
     render :js => js_emit + update_recordset_js(false)
   end
 
@@ -456,7 +353,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   # is no data already in the cache.  It should result in Javascript code to push the recordset into the cache
   # and then reload the grid (to pull it back out again).
   def _send_recordset
-    puts "Hello from send_recordset: " + self.name.to_s
+    # puts "Hello from send_recordset: " + self.name.to_s
     render :js => update_recordset_js
   end
 
@@ -525,7 +422,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
         trigger(:recordUnselected) # Tell the children that we lost our selection
       end
     end
-    puts "**with a js_emit of: " + js_emit
+    # puts "**with a js_emit of: " + js_emit
     return js_emit
   end
     
@@ -565,7 +462,9 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   # State _filter_display
   # This is triggered when the page is initially drawn, to fill in the filter div.
   # It is used by wire_filters in jqgrid_widget_helper
+  # This also required the apotomo patch to allow rendering a raw view (see also the form display)
   def _filter_display
+    @apotomo_emit_raw_view = true
     render :view => '_filters'
   end
 
@@ -589,6 +488,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
 
   # This is called in the parent by the child to pick up the choice from the child.
   # TODO: Put the Javascript somewhere better if I can
+  # TODO: Somehow make the dirty status of the choice evident visually, so you know you have to save.  Made an attempt with CSS
   def update_choice_js(source, subrecord)
     js_emit = ''
     if selector = @selectors[source]
@@ -600,11 +500,13 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
       end
       @record[field] = subrecord.id
       display_value = escape_javascript(self.send(custom, @record.clone))
-      # Because I don't have access to address_to_event here, I stored the cell click url in the jqgrid.data
+      # Add a dirty class if this is a change that needs saving
+      class_update = @record.send(field.to_s + '_changed?') ? ".addClass('dirty')" : ".removeClass('dirty')"
+      # The cell click url was stored in the jqgrid.data
       js_emit = <<-JS
         /*ensureTitlePanel("##{@jqgrid_id}",jQuery('##{@jqgrid_id}').data('draw_panel_url')); */
         var f = jQuery("##{@jqgrid_id}").closest('.ui-jqgrid-view').find('.jqgw-form');
-        f.find('#display_#{resource_field}').html('#{display_value}').effect('highlight');
+        f.find('#display_#{resource_field}')#{class_update}.html('#{display_value}').effect('highlight');
         f.find('##{resource_field}').val('#{subrecord.id}');
         JS
       js_emit += js_flash_feedback("Choice updated.")
@@ -616,15 +518,12 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   
   # descendents_to_reload creates a list of all descendants that have the select_on_load property set and so
   # might wind up having a selection automatically set.  The _setup state puts this in an instance variable
-  # that the views can then use.
-  # I think the new Apotomo has renamed children_to_render to visible_children.  At least I hope that is what happened.
+  # that the views can then use.  visible_children is defined by apotomo.
   def descendants_to_reload
     d = []
     v = visible_children
     if v.size > 0
       v.each do |c|
-    # if children_to_render.size > 0
-    #   children_to_render.each do |c|
         if c.select_on_load
           d += c.descendants_to_reload
         end
@@ -637,9 +536,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   # eager_load is a helper for an otherwise kind of esoteric-looking modification you can make
   # to the 'all' filter to include other tables in load_records.  You can do things like
   # eager_load(:show_type) or eager_load({:employee => :person}).
-  # TODO: I might want to add a more global eager_load, so it doesn't need to be included in every
-  # TODO: ...filter.  Same for conditions.
-  # TODO: In the quest to reduce instance variables, note that I need @filters to be modifiable for this to work.
+  # TODO: I might want to add a more global eager_load, so it doesn't need to be included in every filter. Same for conditions.
   def eager_load(tables, filter = 'all')
     @filters.assoc(filter)[1][:include] = (tables.is_a?(Array) ? tables : [tables])
   end
@@ -674,7 +571,6 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     # jqGridWidget options
     options[:action] ||= 'event'
     options[:object] ||= ''
-    # options[:panel_under_row] = false unless options.has_key?(:panel_under_row)
     @columns << options
   end
   
@@ -719,7 +615,6 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     @rows_per_page = (param(:rows) || @rows_per_page || @jqgrid_options[:rows_per_page] || 20).to_i
     @sidx = (param(:sidx) || @sidx || @default_sidx)
     @sord = (param(:sord) || @sord || 'asc')
-    # @search = (param(:_search) || @search || '')
     livesearch = param(:livesearch)
     if livesearch
       if (livesearch_split = livesearch.split('@',3)).size > 1
@@ -796,24 +691,6 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   end
   
   # Constants and utilities
-
-  # Not sure why I'm returning an instance variable with a method.  But there it is.
-  # Later maybe try for an accessor?  Is there a reason for this?  Scoping?
-  # def resource
-  #   @resource
-  # end
-  
-  # def resource_model
-  #   Object.const_get @resource.classify
-  # end
-
-  # Overriding apotomo::stateful_widget's method (used to be frame_content)
-  # Should now be obsolete since I subclassed JavaScriptWidget instead.
-  # No frame generated by the widget, assuming that relevant divs are generated elsewhere
-  # def frame_content_for(content,html_options)
-  #   content
-  # end
-  
 
   # The following functions define the Javascript calls that the widget generates.
   # If need be these can be redefined.

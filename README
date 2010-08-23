@@ -46,6 +46,7 @@ http://www.trirand.com/blog/
 As I write this, 3.6.4 is available, and I have built it as jquery.jqGrid.min.js.  This does not point into the repository, and will not be updated by git updates, it needs to be fixed by hand.  There is an alias jqGrid in vendor/plugins that points to the current jqGrid directory.
 
 
+This needs jRails too.  TODO: Put this in.
 
 Usage: QUITE SERIOUSLY OUT OF DATE
 
