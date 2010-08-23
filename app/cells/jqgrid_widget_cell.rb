@@ -68,6 +68,18 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   #   render
   # end
   #
+  # If you are going to have two basically independent top widgets, it seems that they still need to be in a
+  # parent-child relationship, just without the communication wiring.  So, to do something like that,
+  # you would just attach one top widget to another.  I think you can have as many children of the top top widget
+  # as you want, they just can't be children of root.  Then, in your _setup view for the topmost widget, set the
+  # layout, use table_to_wire, etc., for that widget, and then use rendered_children['widget_id'] for the others.
+  # In the view (for the controller, which presumably corresponds to your topmost widget) just render the topmost one.
+  # use_widgets do |root|
+  #   root << jqg_top_widget('profile_status') do |wid|
+  #     wid << jqg_top_widget('profile_role')
+  #   end
+  # end
+  #
   # In the subclassed widget, you set up the columns and grid as below.  This has a selector.  :program_name is the custom
   # display function (translates from id to name).  Because there is a selector, the custom display function needs to be
   # indicated as a helper_method, since there will be need to draw it in the view.  Selectors should also be listed in the
@@ -361,7 +373,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   # is no data already in the cache.  It should result in Javascript code to push the recordset into the cache
   # and then reload the grid (to pull it back out again).
   def _send_recordset
-    # puts "Hello from send_recordset: " + self.name.to_s
+    puts "Hello from send_recordset: " + self.name.to_s
     render :js => update_recordset_js
   end
 
