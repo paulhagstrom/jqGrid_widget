@@ -185,9 +185,12 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
           
     yield self if block_given?
   
-    @sortable_columns = (@columns.map {|c| c[:sortable] ? c[:index] : nil}).compact
+    @sortable_columns = {}
+    @columns.each {|c| @sortable_columns[c[:index]] = c[:field] if c[:sortable] }
+    # @sortable_columns = (@columns.map {|c| c[:sortable] ? c[:index] : nil}).compact
     @default_sidx = (@columns.map {|c| c[:sortable] == 'default' ? c[:index] : nil}).compact.first
   end
+  
   
   # Things you may want to override
   
@@ -580,18 +583,22 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   # :custom => :method_name (method in cell definition to provide output for the cell, via self.send :method_name)
   # :action => 'row_panel', 'title_panel', or 'event' (or nothing, for no cell select action)
   # :object => name of partial to render (row_panel, title_panel) or something about the event.
-  # :alias => 'field' -- this is used by the livesearch as a way to refer toa a field without periods.
+  # JavaScript deals poorly with fields that have periods in them, so if you want something like 'people.last_name'
+  # as the field (which will magically do what it is supposed to), you need to provide an undotted alias for jqGrid.
+  # This can be accomplished by passing :index in explicitly, most everything is built off of that, and :field is a
+  # jqGridWidget option that preserves the original intent.
   def add_column(field, options = {})
     # jqGrid options
-    options[:index] = field
-    options[:name] ||= field
-    options[:label] ||= field.humanize
+    options[:index] ||= field
+    options[:name] ||= options[:index]
+    options[:label] ||= options[:index].humanize
     options[:width] ||= 100
     options[:search] = false unless options.has_key?(:search)
     options[:sortable] = false unless options.has_key?(:sortable)
     # jqGridWidget options
     options[:action] ||= 'event'
     options[:object] ||= ''
+    options[:field] = field
     @columns << options
   end
   
@@ -624,7 +631,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
       {
         :id => r.id,
         :cell => @columns.collect do |c|
-          c[:custom] ? self.send(c[:custom], r) : (r.attributes)[c[:index]]
+          c[:custom] ? self.send(c[:custom], r) : (r.attributes)[c[:field]]
         end
       }
     end
@@ -652,8 +659,10 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   def load_records
     get_paging_parameters
     @filter, @subfilter, find_include, find_conditions, @total_records = filter_prepare
-    find_order = @sortable_columns.include?(@sidx) ? (@sidx + ' ' + ((@sord == 'desc') ? 'DESC' : 'ASC')) :
-      (@default_sidx ? @default_sidx + ' ASC' : nil)
+    find_order = @sortable_columns.has_key?(@sidx) ? (@sortable_columns[@sidx] + ' ' + ((@sord == 'desc') ? 'DESC' : 'ASC')) :
+      (@default_sidx ? @sortable_columns[@default_sidx] + ' ASC' : nil)
+    # find_order = @sortable_columns.include?(@sidx) ? (@sidx + ' ' + ((@sord == 'desc') ? 'DESC' : 'ASC')) :
+    #   (@default_sidx ? @default_sidx + ' ASC' : nil)
     rows_per_page = @rows_per_page
     if rows_per_page > 0
       @total_pages = (@total_records > 0 && rows_per_page > 0) ? 1 + (@total_records/rows_per_page).ceil : 0
