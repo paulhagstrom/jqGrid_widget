@@ -289,11 +289,11 @@ module JqgridWidget::JqgridWidgetHelper
   end
   
   # Provide the HTML for a live search field
-  def html_live_search_to_wire(field, prompt = 'Search', table = @jqgrid_id)
+  def html_live_search_to_wire(field, prompt = 'Search:', field_size = 20, table = @jqgrid_id)
     submit_search_url = url_for_event(:fetchData)
     <<-HTML
     <form id="#{table}_#{field}_search_form" action="#">
-      #{prompt}: <input type="text" name="#{field}" autocomplete="off" value="" id="#{table}_#{field}_search" onkeydown="doLiveSearch('#{table}_#{field}_search','#{submit_search_url}', arguments[0]||event)" />
+      #{prompt}<input type="text" name="#{field}" size="#{field_size}" autocomplete="off" value="" id="#{table}_#{field}_search" onkeydown="doLiveSearch('#{table}_#{field}_search','#{submit_search_url}', arguments[0]||event)" />
     </form>    
     HTML
   end
