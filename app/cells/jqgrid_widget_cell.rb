@@ -85,6 +85,9 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   # indicated as a helper_method, since there will be need to draw it in the view.  Selectors should also be listed in the
   # @selectors hash, which has members like 'resource' => [:parent_field, :custom_display_method].
   #
+  # A custom display method can take a static parameter; if the custom field is defined as :custom => :handler__parm
+  # then handler will be called with the record as the first parameter and 'parm' as the second.
+  # 
   # helper_method :program_name
   # 
   # def _setup
@@ -522,7 +525,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
         @record = scoped_model.new
       end
       @record[field] = subrecord.id
-      display_value = escape_javascript(self.send(custom, @record.clone))
+      display_value = escape_javascript(call_custom(custom,@record.clone))
       # Add a dirty class if this is a change that needs saving
       class_update = @record.send(field.to_s + '_changed?') ? ".addClass('dirty')" : ".removeClass('dirty')"
       # The cell click url was stored in the jqgrid.data
@@ -625,13 +628,21 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     }.to_json
   end
   
+  def call_custom(custom, record)
+    if (custom_call = custom.to_s.split('__',2)).size > 1
+      self.send(custom_call[0], record, custom_call[1])
+    else
+      self.send(custom, record)
+    end
+  end
+  
   # Turn @records into something appropriate for the json_for_jqgrid method
   def grid_rows(records)
     records.collect do |r|
       {
         :id => r.id,
         :cell => @columns.collect do |c|
-          c[:custom] ? self.send(c[:custom], r) : (r.attributes)[c[:field]]
+          c[:custom] ? call_custom(c[:custom], r) : (r.attributes)[c[:field]]
         end
       }
     end
