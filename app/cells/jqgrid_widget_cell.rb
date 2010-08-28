@@ -346,13 +346,17 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   # This is the target of the edit panel's form submission.
   # Updates or adds the record, reselects it, and alerts children and parents.
   # Dangerously, perhaps, it relies on the stateful nature of these things.  It knows the id from @record.
-  def _edit_panel_submit
+  # If this is passed an argument it will be used instead of the request parameters
+  # This is to allow a subclassed widget to inspect/modify them and then do super modified_params
+  def _edit_panel_submit(req_parms = nil)
+    request_params = req_parms || param(@resource.to_sym)      
     js_emit = ''
     # @record = scoped_model.find_by_id(param(:id)) || scoped_model.new
+    puts 'REQUEST PARAMETERS IN EDIT PANEL SUBMIT: ' + request_params.inspect
     if @record.new_record?
-      @record = scoped_model.create(param(@resource.to_sym))
+      @record = scoped_model.create(request_params)
     else
-      @record.update_attributes(param(@resource.to_sym))
+      @record.update_attributes(request_params)
     end
     if @record.save
       @record.reload # Be sure we get the id if this was a new record
