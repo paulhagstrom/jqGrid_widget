@@ -19,4 +19,7 @@ module JqgridWidgetUtilities
     concat(render(:partial => partial_name, :locals => options))
   end
   
+  def jqgrid_html_escape(stringy)
+    CGI.escapeHTML(stringy.to_s.gsub(/[\n\r]/,' '))
+  end
 end
