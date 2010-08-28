@@ -649,16 +649,28 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     end
   end
   
+  # This is split out so that it is hookable.  If you want to set up some lookups that aren't eager loaded for
+  # your custom field renderers, override this and call super
+  def grid_row(r)
+    {
+      :id => r.id,
+      :cell => @columns.collect do |c|
+        c[:custom] ? call_custom(c[:custom], r) : (r.attributes)[c[:field]]
+      end
+    }
+  end
+  
   # Turn @records into something appropriate for the json_for_jqgrid method
   def grid_rows(records)
-    records.collect do |r|
-      {
-        :id => r.id,
-        :cell => @columns.collect do |c|
-          c[:custom] ? call_custom(c[:custom], r) : (r.attributes)[c[:field]]
-        end
-      }
-    end
+    records.collect {|r| grid_row(r)}
+    # records.collect do |r|
+    #   {
+    #     :id => r.id,
+    #     :cell => @columns.collect do |c|
+    #       c[:custom] ? call_custom(c[:custom], r) : (r.attributes)[c[:field]]
+    #     end
+    #   }
+    # end
   end
   
   # Note that I don't reset @livesearch here, which allows it to persist
