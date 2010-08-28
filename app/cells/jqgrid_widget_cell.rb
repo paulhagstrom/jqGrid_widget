@@ -691,6 +691,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   end
   
   # This is the actual method that queries the database.
+  # I'm not certain I've got things being stored correctly.
   # I am not certain about some of this paging stuff.  Maybe.
   def load_records
     get_paging_parameters
@@ -733,7 +734,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     scoped_model.find(:all, :include => find_include, :conditions => find_conditions,
       :limit => rows_per_page, :offset => @start_offset, :order => find_order)
   end
-  
+    
   # Prepare the instance variables for load_record, using the filter, returns things
   # used by load_records (but is also used without load_records to retrieve the
   # record counts for the individual filters)
@@ -741,12 +742,12 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   def filter_prepare(current_filter = @filter, subfilter = @subfilter)
     verified_filter = @filters.assoc(current_filter) ? current_filter : @filters.first[0]
     subfilter ||= {}
-    filter = @filters.assoc(verified_filter)[1]
+    the_filter = @filters.assoc(verified_filter)[1]
     # I had to do this in this kind of funny way to avoid actually modifying @filters.
-    find_conditions = filter.has_key?(:conditions) ? filter[:conditions].dup : ['1']
+    find_conditions = the_filter.has_key?(:conditions) ? the_filter[:conditions].dup : ['1']
     find_include = []
     # find_conditions += filter[:conditions] if filter.has_key?(:conditions)
-    find_include += filter[:include] if filter.has_key?(:include)
+    find_include += the_filter[:include] if the_filter.has_key?(:include)
     # If no subfilters have been checked, this should be skipped, accept all
     # If some subfilters have been checked, only the checked ones will be traversed.
     # Within a single key, two checks yields OR
@@ -754,7 +755,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     # The idea is that the subfilter conditions will read "field in (?)"
     # And then the keys will provide the array of options
     subfilter.each do |key, sf|
-      fsf = filter[:subfilters].assoc(key)[1].dup
+      fsf = the_filter[:subfilters].assoc(key)[1].dup
       find_conditions[0] += (' and ' + fsf[:conditions])
       find_conditions << sf.keys
       find_include << fsf[:include] if fsf.has_key?(:include)
