@@ -142,7 +142,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     if start_state == :_setup
       # important for parents, children, selectors
       @resource = opts[:resource]
-      @jqgrid_id = @resource.pluralize + '_list_grid'
+      @jqgrid_id = opts[:jqgrid_id] || @resource.pluralize + '_list_grid'
       # is_top_widget is true for parents only, not children or selectors
       @is_top_widget = opts[:top_widget] || false
       # for selectors, selector_for should hold the field (symbol) of the parent's record the selection depends on, nil for parents, child

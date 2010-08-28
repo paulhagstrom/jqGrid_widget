@@ -61,7 +61,7 @@ class JqgridWidgetController < ApplicationController
     resource_alias = opts[:resource_alias] || resource
     widget_id = pfx + (opts[:widget_id] || resource_alias)
     cell_class = opts[:cell_class] || (resource_alias.pluralize + '_cell').camelize
-    jqgrid_id = opts[:jqgrid_id] || (pfx + resource_alias.pluralize + '_list')
+    jqgrid_id = opts[:jqgrid_id] || (pfx + resource_alias.pluralize + '_list_grid')
     x = widget(cell_class, widget_id, :_setup, opts.merge({:resource => resource, :jqgrid_id => jqgrid_id}))
     # This could probably be made more elegant.
     # All widgets watch themselves for cellClick, drawPanel, and deleteRecord events
