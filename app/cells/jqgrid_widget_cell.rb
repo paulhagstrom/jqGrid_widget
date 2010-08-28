@@ -18,6 +18,8 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   attr_reader :record
   # Make jqgrid_id gettable from the outside, descendants_to_reload asks for this from children
   attr_reader :jqgrid_id
+  # Make form_widget gettable from the outside, used when opening a title panel
+  attr_reader :is_form_widget
 
   attr_reader :select_on_load
   attr_reader :selector_for
@@ -145,6 +147,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
       @jqgrid_id = opts[:jqgrid_id] || @resource.pluralize + '_list_grid'
       # is_top_widget is true for parents only, not children or selectors
       @is_top_widget = opts[:top_widget] || false
+      @is_form_widget = opts[:form_widget] || false
       # for selectors, selector_for should hold the field (symbol) of the parent's record the selection depends on, nil for parents, child
       @selector_for = opts[:selector_for]
     end
@@ -161,6 +164,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     @jqgrid_options = {
       :row_action => 'title_panel',
       :row_object => '_panel',
+      :rows_per_page => 0, # unlimited
       :caption => @resource.pluralize.humanize #'Records'
       # jqgrid_options can include:
       # :caption => printable plural form of resource (default 'Records')
@@ -306,6 +310,11 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
       #   :cell_column => param(:cell_column), :table_view => param(:table_view)})
       specs = jqgrid_make_js({:id => param(:id), :table => param(:table), :panel => panel_object,
         :cell_column => param(:cell_column), :table_view => param(:table_view)})
+    end
+    # If the panel has any jqgrid widgets in it we need to remove them first before bringing in the new
+    # edit panel.  So look for any child widgets for which form_widget is true.
+    self.children.each do |c|
+      js_emit += "if(jQuery('##{c.jqgrid_id}')){jQuery('##{c.name}').remove();}" if c.is_form_widget
     end
     case panel_type
     when 'title_panel'

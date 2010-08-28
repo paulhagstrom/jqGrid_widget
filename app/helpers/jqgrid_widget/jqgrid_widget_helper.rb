@@ -83,7 +83,7 @@ module JqgridWidget::JqgridWidgetHelper
     }
 
     # If this is a child widget, set up an empty dataset
-    js_emit = @is_top_widget ? '' : js_push_json_to_cache(empty_json)
+    js_emit = (@is_top_widget || @is_form_widget) ? '' : js_push_json_to_cache(empty_json)
     
     # TODO: This does not emit particularly pretty Javascript. Maybe clean this up someday.
     js_emit += <<-JS

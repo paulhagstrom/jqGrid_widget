@@ -38,16 +38,18 @@ function openTable(table) {
 function indicateReq(table) {
   var ts = jQuery(table)[0];
 	//openTable(table);
-	switch(ts.p.loadui) {
-		case "disable":
-			break;
-		case "enable":
-			jQuery("#load_"+ts.p.id).show();
-			break;
-		case "block":
-			jQuery("#lui_"+ts.p.id).show();
-			jQuery("#load_"+ts.p.id).show();
-			break;
+	if(ts){
+		switch(ts.p.loadui) {
+			case "disable":
+				break;
+			case "enable":
+				jQuery("#load_"+ts.p.id).show();
+				break;
+			case "block":
+				jQuery("#lui_"+ts.p.id).show();
+				jQuery("#load_"+ts.p.id).show();
+				break;
+		}
 	}
 }
 
