@@ -50,7 +50,7 @@ module JqgridWidget::JqgridWidgetHelper
       :scrollrows => true,
       :sortorder => 'asc',
       :viewsortable => true,
-      :loadui => 'disable',
+      :loadui => 'block',
       :height => 200,
       :collapsed => false,
       :caption => 'Records',
@@ -115,7 +115,13 @@ module JqgridWidget::JqgridWidgetHelper
     jQuery('##{@jqgrid_id}').data('cell_click_url', '#{url_for_event(:cellClick)}');
     jQuery('##{@jqgrid_id}').data('draw_panel_url', '#{url_for_event(:drawPanel)}');
     JS
-
+    # Don't start the spinner in form widgets because I can't seem to turn them off.
+    unless @is_form_widget
+      js_emit += <<-JS
+      jqgw_beginReq('##{@jqgrid_id}');
+      JS
+    end
+    
     javascript_tag js_emit
   end
   
@@ -249,8 +255,14 @@ module JqgridWidget::JqgridWidgetHelper
     @cell.descendants_to_reload.each do |child|
     # @descendants_to_reload.each do |child|
       children_loading += <<-JS
-        indicateReq('##{child}');closeEditPanel('##{child}');
+        jqgw_beginReq('##{child}');closeEditPanel('##{child}');
       JS
+      # children_loading += <<-JS
+      #   indicateReq('##{child}');closeEditPanel('##{child}');
+      # JS
+      # children_loading += <<-JS
+      #   closeEditPanel('##{child}');
+      # JS
     end
     return children_loading
   end
@@ -273,6 +285,7 @@ module JqgridWidget::JqgridWidgetHelper
           var options = {
             dataType:'script'
           }
+          jqgw_beginReq('##{table}');
           jQuery(this).closest('form').ajaxSubmit(options); // uses jQuery Form plugin
           return true;
         });
@@ -280,6 +293,7 @@ module JqgridWidget::JqgridWidgetHelper
           .hover(function(){jQuery(this).addClass('ui-state-hover');},
         		   function(){jQuery(this).removeClass('ui-state-hover');})
           .click(function() {
+            jqgw_beginReq('##{table}');
             jQuery.getScript('#{subfilter_open}&catid='+jQuery(this).attr('id'));
             });
         jQuery.getScript('#{subfilter_open}&init=yes'); // open the default filter

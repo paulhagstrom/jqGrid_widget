@@ -2,7 +2,8 @@
 /* Some of this may well be redundant with things already provided somewhere in jQueryUI */
 
 .jqgw_edit_panel {
-	background-color: #FFCCCC;
+	background-color: #FFFFAA;
+	padding: 5px;
 }
 .jqgw_edit_subpanel {
 	background-color: #CCFFCC;

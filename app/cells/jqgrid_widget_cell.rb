@@ -291,7 +291,8 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     puts "handle_cell_click: #{parmid}, #{table}, #{cell_column}, #{table_view}"
     # only do this if the table is there
     js_emit = "if(jQuery('##{table}')){"
-    js_emit += select_record_js(parmid)
+    # js_emit += select_record_js(parmid)
+    @record = scoped_model.find_by_id(id) || scoped_model.new
     id = @record.id.to_i
     if id > 0
       panel_type = nil
@@ -336,10 +337,13 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
       js_emit += "openRowPanel(#{specs}, jQuery('##{@jqgrid_id}').data('draw_panel_url'), true);"
     end
     js_emit += "}"
+    # I would like the form to open prior to the retrieval of the child data, but I can't seem to get it
+    # to work.  It always wants to render the children first. This will require thought.
+    js_emit += select_record_js(parmid)
     puts "handle_cell_click returning: #{js_emit}"
     js_emit
   end
-  
+    
   # This returns the html for an edit panel
   # It is called by an event, but if I can get this directly, that would be better.  It's kind of slow now.
   # Note: I had to patch apotomo in order to keep this from spitting out a Javascript page update.
@@ -481,6 +485,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
         trigger(:recordUnselected) # Tell the children that we lost our selection
       end
     end
+    # js_emit += 'jqgw_endReq();'
     # puts "**with a js_emit of: " + js_emit
     return js_emit
   end
@@ -497,27 +502,40 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   def _set_filter
     if param(:catid)
       catsplit = param(:catid).split('__')
-      filter = catsplit[0]
-      category_not_clicked = false
+      parmfilter = catsplit[0]
+      # category_not_clicked = false
     else
-      filter = param(:filter)
-      category_not_clicked = true
+      parmfilter = param(:filter)
+      # category_not_clicked = true
     end
-    new_filter = @filters.assoc(filter) ? filter : @filters.first[0]
+    new_filter = @filters.assoc(parmfilter) ? parmfilter : (@filter || @filters.first[0])
     filter_unchanged = (@filter == new_filter)
-    if param(:init)
-      filter_unchanged = false
-    end
     @filter = new_filter
-    @subfilter = param(:subfilter) ? param(:subfilter) : {}
+    # For now I am just accepting the subfilter as-is, I am pretty sure it is validated elsewhere
+    @subfilter = param(:subfilter) || {}
+    # @subfilter = param(:subfilter)
+    # puts "FILTER FILTER FILTER: Init? #{(param(:init) ? 'YES' : 'NO)')}, Category not clicked? #{(category_not_clicked ? 'YES' : 'NO')}, Unchanged? #{(filter_unchanged ? 'YES' : 'NO')}, subfilter: #{@subfilter.inspect}"
     # puts "FILTER FILTER FILTER UPDATED UPDATED UPDATED. filter " + @filter.inspect + ' ** SUBFILTER ** ' + @subfilter.inspect
-    redraw_filter = filter_unchanged ? '' : js_redraw_filter
-    clear_checkboxes = (filter_unchanged && category_not_clicked) ? '' : <<-JS
+    # Redraw the filter if the top filter changed, or on init
+    redraw_filter = (param(:init) || !filter_unchanged)  ? js_redraw_filter : ''
+    # Update the results unless on init, or unless the filter was unchanged even though category was clicked
+    # update_results = (param(:init) || (filter_unchanged && !category_not_clicked)) ? '' : update_recordset_js(false)
+    update_results = (param(:init) || filter_unchanged) ? '' : update_recordset_js(false)
+    clear_checkboxes = (filter_unchanged) ? '' : <<-JS
       jQuery('##{@jqgrid_id}_#{@filter}_filter_form').find('input[type=checkbox]').attr('checked',false);
     JS
-    render :js => redraw_filter + clear_checkboxes + update_recordset_js(false)
+    # clear_checkboxes = (filter_unchanged && category_not_clicked) ? '' : <<-JS
+    #   jQuery('##{@jqgrid_id}_#{@filter}_filter_form').find('input[type=checkbox]').attr('checked',false);
+    # JS
+    render :js => redraw_filter + clear_checkboxes + update_results
   end
 
+  def _set_subfilter
+    @filter = @filters.assoc(param(:filter)) ? param(:filter) : (@filter || @filters.first[0])
+    @subfilter = param(:subfilter)
+    render :js => update_recordset_js(false)
+  end
+  
   # State _filter_display
   # This is triggered when the page is initially drawn, to fill in the filter div.
   # It is used by wire_filters in jqgrid_widget_helper

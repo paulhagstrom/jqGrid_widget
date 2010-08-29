@@ -37,6 +37,7 @@ function openTable(table) {
 // tables into the "loading" state while the parent loads. The table is expanded when this
 // happens, in order for the "loading..." message to appear in a sensible place.
 // I also ditched the beforeRequest and the check for initial collapsed status.
+/* old version
 function indicateReq(table) {
   var ts = jQuery(table)[0];
 	//openTable(table);
@@ -54,6 +55,44 @@ function indicateReq(table) {
 		}
 	}
 }
+*/
+// copied from grid.base.js with the ts= and if(ts) lines added, others commented out, disable ignored
+function jqgw_beginReq(table) {
+	var ts = jQuery(table)[0];
+	if(ts){
+		//ts.grid.hDiv.loading = true;
+		//if(ts.p.hiddengrid) { return;}
+		switch(ts.p.loadui) {
+			case "disable":
+				break;
+			case "enable":
+				jQuery("#load_"+ts.p.id).show();
+				break;
+			case "block":
+				jQuery("#lui_"+ts.p.id).show();
+				jQuery("#load_"+ts.p.id).show();
+				break;
+		}		
+	}
+}
+
+function jqgw_endReq(table) {
+	var ts = jQuery(table)[0];
+	if(ts){
+		//ts.grid.hDiv.loading = false;
+		switch(ts.p.loadui) {
+			case "disable":
+				break;
+			case "enable":
+				jQuery("#load_"+ts.p.id).hide();
+				break;
+			case "block":
+				jQuery("#lui_"+ts.p.id).hide();
+				jQuery("#load_"+ts.p.id).hide();
+				break;
+		}
+	}
+}
 
 // Dataset caching:
 
@@ -66,14 +105,16 @@ var pendingJSON = new Array();
 function retrieveJSON(table,purl,pdata) {
 	var ts = jQuery(table)[0],
 	loadComplete = jQuery.isFunction(ts.p.loadComplete) ? ts.p.loadComplete : false;
+	//jqgw_beginReq(table);
 	if (pendingJSON[table] == null) {
-		indicateReq(table);
+		//indicateReq(table);
 		jQuery.getScript(purl+'&'+jQuery.param(pdata));
 	} else {
 		ts.addJSONData(eval("("+pendingJSON[table]+")"));
 		if(loadComplete) loadComplete(pendingJSON[table],'success');
 		delete pendingJSON[table];
 	}
+	jqgw_endReq(table);
 }
 function pushJSON(table,json) {
   pendingJSON[table] = json;

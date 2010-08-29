@@ -74,6 +74,7 @@ class JqgridWidgetController < ApplicationController
     x.respond_to_event :fetchData, :on => x.name, :with => :_send_recordset, :from => x.name
     x.respond_to_event :filterDisplay, :on => x.name, :with => :_filter_display, :from => x.name
     x.respond_to_event :setFilter, :on => x.name, :with => :_set_filter, :from => x.name
+    x.respond_to_event :setSubFilter, :on => x.name, :with => :_set_subfilter, :from => x.name
     x.respond_to_event :filterCounts, :on => x.name, :with => :_filter_counts, :from => x.name
     # Return the widget
     yield x if block_given?
