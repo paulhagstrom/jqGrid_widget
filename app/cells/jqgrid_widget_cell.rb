@@ -278,17 +278,30 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   # TODO: The add function here doesn't make much sense in the context of column panels.
   # TODO: Are column panels really important?  Or maybe just for viewing?
   def _cell_click
-    js_emit = select_record_js(param(:id).to_i)
+    render :js => handle_cell_click(param(:id).to_i, param(:table), param(:cell_column).to_i, param(:table_view))
+  end
+  
+  # This is where the work of handling a cell click event happens, but it is split out so that it can
+  # also be called programmatically in service of selecting the first record upon loading
+  # The idea here was to allow the possibility of opening an edit panel for the first record on load.
+  # It might work in principle, but I wanted it for a widget in a form, and the problem is that it
+  # renders the childrens js first, which winds up trying to do the selection before the table exists.
+  # Not sure how to solve this, so for now going back to just selecting the record.
+  def handle_cell_click(parmid, table, cell_column, table_view)
+    puts "handle_cell_click: #{parmid}, #{table}, #{cell_column}, #{table_view}"
+    # only do this if the table is there
+    js_emit = "if(jQuery('##{table}')){"
+    js_emit += select_record_js(parmid)
     id = @record.id.to_i
     if id > 0
       panel_type = nil
       # Priority goes to actions defined by columns
       # I am preparing to remove column actions, and require that all panels just load _panel.
       # Maybe someday later I can bring back the complexity of column panels if they are really useful for something.
-      case @columns[param(:cell_column).to_i][:action]
+      case @columns[cell_column][:action]
       when 'title_panel', 'panel'
-        panel_type = @columns[param(:cell_column).to_i][:action]
-        panel_object = @columns[col.to_i][:object]
+        panel_type = @columns[cell_column][:action]
+        panel_object = @columns[cell_column][:object]
       when 'choice'
           js_emit += js_choose_id(@record.id) + parent.update_choice_js(self.name, @record)
       else
@@ -308,8 +321,8 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     if panel_type
       # specs = jqgrid_make_js({:id => param(:id), :table => param(:table),
       #   :cell_column => param(:cell_column), :table_view => param(:table_view)})
-      specs = jqgrid_make_js({:id => param(:id), :table => param(:table), :panel => panel_object,
-        :cell_column => param(:cell_column), :table_view => param(:table_view)})
+      specs = jqgrid_make_js({:id => parmid, :table => table, :panel => panel_object,
+        :cell_column => cell_column, :table_view => table_view})
     end
     # If the panel has any jqgrid widgets in it we need to remove them first before bringing in the new
     # edit panel.  So look for any child widgets for which form_widget is true.
@@ -322,9 +335,11 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     when 'panel'
       js_emit += "openRowPanel(#{specs}, jQuery('##{@jqgrid_id}').data('draw_panel_url'), true);"
     end
-    render :js => js_emit
+    js_emit += "}"
+    puts "handle_cell_click returning: #{js_emit}"
+    js_emit
   end
-    
+  
   # This returns the html for an edit panel
   # It is called by an event, but if I can get this directly, that would be better.  It's kind of slow now.
   # Note: I had to patch apotomo in order to keep this from spitting out a Javascript page update.
@@ -442,6 +457,11 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
           else
             unless @select_on_load == 'unique'
               # select first
+              # the line below was intended to open a panel, but it doesn't seem to work.
+              # I think it is because the js is executed before the panel exists (although why select_record_js works
+              # is then kind of mysterious). This requires further investigation. For now, this works, though it
+              # can't open an edit panel for select first.
+              # js_emit += handle_cell_click(records.first.id, @jqgrid_id, 0, 'gview_' + @jqgrid_id)
               js_emit += select_record_js(records.first.id)
               selection_survived = true
             end

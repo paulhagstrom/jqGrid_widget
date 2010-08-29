@@ -1,8 +1,11 @@
 /* CSS additions used by jqgrid_widget */
 /* Some of this may well be redundant with things already provided somewhere in jQueryUI */
 
+.jqgw_edit_subpanel {
+	background-color: #CCFFCC;
+}
 .jqgw_edit_panel {
-	background-color: #CCCCFF;
+	background-color: #FFCCCC;
 }
 .jqgw_cell_focus {
 	background-color: #CCCCFF;

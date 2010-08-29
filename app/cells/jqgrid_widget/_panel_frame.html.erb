@@ -1,8 +1,11 @@
 <%
 	# This is frame around the edit panel (generally called from _panel_html.erb)
 	# It puts the contents of the edit panel within a form that has the proper targeting
+	# You can pick a different class for the edit panel by sending in :div_class => 'other_class'
+	# That is, your _panel.html.edb cell would contain a block like this
+	# jqgrid_widget_block_to_partial '/jqgrid_widget/panel_frame', :div_class => 'jqgw_edit_subpanel' do 
 %>
-<div class="jqgw_edit_panel">
+<div class="<%= div_class rescue 'jqgw_edit_panel' %>">
 	<%= form_to_event :editSubmit %>
 		<%= body %>
 	</form>

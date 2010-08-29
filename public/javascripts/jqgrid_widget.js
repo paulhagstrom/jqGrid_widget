@@ -22,12 +22,14 @@ function activateTitleBar(table) {
 // The hideTable and openTable functions provide a way to "click on the collapse icon" programmatically.
 function hideTable(table) {
 	if (jQuery(table).getGridParam('gridstate') == 'visible') {
-		jQuery(table).closest('.ui-jqgrid-view').find('.ui-jqgrid-titlebar-close').trigger('click');
+		jQuery(table).setGridState('hidden');
+//		jQuery(table).closest('.ui-jqgrid-view').find('.ui-jqgrid-titlebar-close').trigger('click');
 	}
 }
 function openTable(table) {
 	if (jQuery(table).getGridParam('gridstate') == 'hidden') {
-		jQuery(table).closest('.ui-jqgrid-view').find('.ui-jqgrid-titlebar-close').trigger('click');
+		jQuery(table).setGridState('visible');
+//		jQuery(table).closest('.ui-jqgrid-view').find('.ui-jqgrid-titlebar-close').trigger('click');
 	}
 }
 // jQGrid's "loading" UI behavior is hidden away as a private function, so I duplicated
