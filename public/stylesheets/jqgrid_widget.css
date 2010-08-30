@@ -7,9 +7,11 @@
 }
 .jqgw_edit_subpanel {
 	background-color: #CCFFCC;
+	padding: 5px;
 }
 .jqgw_edit_subsubpanel {
 	background-color: #CCCCFF;
+	padding: 5px;
 }
 .jqgw_cell_focus {
 	background-color: #CCCCFF;
@@ -30,6 +32,11 @@
 /* Perhaps this is already do-able with jqgrid as-is, but I didn't see how, so I did this instead. */
 .ui-widget-overlay {
 	z-index:1;
+}
+
+/* allow word wrap in a td */
+td.jqgw_wrap {
+    white-space: normal !important;
 }
 
 /* replace loading indicator provided by jqgrid */
