@@ -328,7 +328,9 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     # If the panel has any jqgrid widgets in it we need to remove them first before bringing in the new
     # edit panel.  So look for any child widgets for which form_widget is true.
     self.children.each do |c|
-      js_emit += "if(jQuery('##{c.jqgrid_id}')){jQuery('##{c.name}').remove();}" if c.is_form_widget
+      if defined?(c.jqgrid_id) && defined?(c.is_form_widget) # only do this for jqgrid widgets
+        js_emit += "if(jQuery('##{c.jqgrid_id}')){jQuery('##{c.name}').remove();}" if c.is_form_widget
+      end
     end
     case panel_type
     when 'title_panel'
@@ -601,10 +603,13 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     v = visible_children
     if v.size > 0
       v.each do |c|
-        if c.select_on_load
-          d += c.descendants_to_reload
+        # only do this stuff for jqgrid widgets, assume that other widgets should be left alone
+        if defined?(c.jqgrid_id) && defined?(c.select_on_load) && defined?(c.descendants_to_reload)
+          if c.select_on_load
+            d += c.descendants_to_reload
+          end
+          d += [c.jqgrid_id]
         end
-        d += [c.jqgrid_id]
       end
     end
     return d
