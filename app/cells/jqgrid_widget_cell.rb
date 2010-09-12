@@ -194,8 +194,8 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   
     @sortable_columns = {}
     @columns.each {|c| @sortable_columns[c[:index]] = c[:field] if c[:sortable] }
-    # @sortable_columns = (@columns.map {|c| c[:sortable] ? c[:index] : nil}).compact
     @default_sidx = (@columns.map {|c| c[:sortable] == 'default' ? c[:index] : nil}).compact.first
+    @jqgrid_options[:initial_sort] = @default_sidx if @default_sidx
   end
   
   
@@ -713,10 +713,15 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   
   # Note that I don't reset @livesearch here, which allows it to persist
   def get_paging_parameters
-    @page = (param(:page) || @page || 1).to_i
-    @rows_per_page = (param(:rows) || @rows_per_page || @jqgrid_options[:rows_per_page] || 20).to_i
-    @sidx = (param(:sidx) || @sidx || @default_sidx)
-    @sord = (param(:sord) || @sord || 'asc')
+    # The default wasn't working, and I'm not sure why I allowed these to persist, so I'm trying without it.
+    # @page = (param(:page) || @page || 1).to_i
+    # @rows_per_page = (param(:rows) || @rows_per_page || @jqgrid_options[:rows_per_page] || 20).to_i
+    # @sidx = (param(:sidx) || @sidx || @default_sidx)
+    # @sord = (param(:sord) || @sord || 'asc')
+    @page = (param(:page) || 1).to_i
+    @rows_per_page = (param(:rows) || @jqgrid_options[:rows_per_page] || 20).to_i
+    @sidx = (param(:sidx) || @default_sidx)
+    @sord = (param(:sord) || 'asc')
     livesearch = param(:livesearch)
     if livesearch
       if (livesearch_split = livesearch.split('@',3)).size > 1
