@@ -287,12 +287,14 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   # It might work in principle, but I wanted it for a widget in a form, and the problem is that it
   # renders the childrens js first, which winds up trying to do the selection before the table exists.
   # Not sure how to solve this, so for now going back to just selecting the record.
+  # If @jqgrid_options has :add_object defined it can in principle open a different panel for adding.
+  # E.g., @jqgrid_options[:add_object] = "_add_panel" (otherwise will just use :row_object)
   def handle_cell_click(parmid, table, cell_column, table_view)
     puts "handle_cell_click: #{parmid}, #{table}, #{cell_column}, #{table_view}"
     # only do this if the table is there
     js_emit = "if(jQuery('##{table}')){"
     # js_emit += select_record_js(parmid)
-    @record = scoped_model.find_by_id(id) || scoped_model.new
+    @record = scoped_model.find_by_id(parmid) || scoped_model.new
     id = @record.id.to_i
     if id > 0
       panel_type = nil
@@ -317,7 +319,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     else
       # Add
       panel_type = 'title_panel'
-      panel_object = @jqgrid_options[:row_object]
+      panel_object = @jqgrid_options.has_key?(:add_object) ? @jqgrid_options[:add_object] : @jqgrid_options[:row_object]
     end
     if panel_type
       # specs = jqgrid_make_js({:id => param(:id), :table => param(:table),

@@ -74,7 +74,7 @@ module JqgridWidget::JqgridWidgetHelper
     }.merge(@jqgrid_options).merge(passed_options)
     # Keys in not_in_grid_definition will not be inserted into the main grid
     # (They are handled separately)
-    not_in_grid_definition = [:url, :pager, :pager_id, :add_button, :del_button, :row_action]
+    not_in_grid_definition = [:url, :pager, :pager_id, :add_button, :del_button, :row_action, :row_object, :add_object]
     # Keys in renamed_options have different names in jqGrid than in jqGrid_widget
     # (Whether or not that was a good idea, I'm handling it now.)
     renamed_options = {
