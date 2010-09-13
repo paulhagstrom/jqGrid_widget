@@ -376,8 +376,10 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     puts 'REQUEST PARAMETERS IN EDIT PANEL SUBMIT: ' + request_params.inspect
     if @record.new_record?
       @record = scoped_model.create(request_params)
+      adjust_after_create
     else
       @record.update_attributes(request_params)
+      adjust_after_update
     end
     if @record.save
       @record.reload # Be sure we get the id if this was a new record
@@ -393,6 +395,16 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     render :js => js_emit + update_recordset_js(false)
   end
 
+  # Called just after a create, override if you want to stick in something like the current user or date.
+  def adjust_after_create
+    # The record is in @record, do what you will, this precedes a save.
+  end
+
+  # Called just after an update, override if you want to stick in something like the current user or date.
+  def adjust_after_update
+    # The record is in @record, do what you will, this precedes a save.
+  end
+  
   # State _delete_record
   # We arrive here from an event triggered by the delete button
   def _delete_record
