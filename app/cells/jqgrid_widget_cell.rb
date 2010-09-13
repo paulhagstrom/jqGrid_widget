@@ -385,6 +385,7 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
     end
     if @record.save
       @record.reload # Be sure we get the id if this was a new record
+      adjust_after_save
       trigger(:recordUpdated)
       js_emit += js_flash_feedback("Record updated.")
       js_emit += <<-JS
@@ -405,6 +406,13 @@ class JqgridWidgetCell < Apotomo::JavaScriptWidget
   # Called just after an update, override if you want to stick in something like the current user or date.
   def adjust_after_update
     # The record is in @record, do what you will, this precedes a save.
+  end
+  
+  # Called just after a save, override if you want to do something like add some children
+  def adjust_after_save
+    # The record is in @record, do what you will, this follows a save and reload (so the id should be present)
+    # This might be rendered mostly unnecessary if you allow the parent to create and update new children,
+    # which I think is reasonably possible most of the time
   end
   
   # State _delete_record
